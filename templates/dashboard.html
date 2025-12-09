@@ -1,0 +1,264 @@
+{{ define "dashboard.html" }}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .title }} - RTLS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/dashboard">Real Time Location System RKS513</a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/devices">Devices</a>
+                    </li>
+                </ul>
+
+                <a href="/logout" class="btn btn-outline-light">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container-fluid py-4">
+        <h2 class="mb-4">Dashboard Overview</h2>
+
+        <!-- Statistics Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Devices</h6>
+                                <h2 class="card-title mb-0 text-primary">{{ .totalDevices }}</h2>
+                            </div>
+                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-cpu text-primary" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-muted">Active Devices</h6>
+                                <h2 class="card-title mb-0 text-success">{{ .activeDevices }}</h2>
+                            </div>
+                            <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-check-circle text-success" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-muted">Locations Tracked</h6>
+                                <h2 class="card-title mb-0 text-info">{{ .locationsCount }}</h2>
+                            </div>
+                            <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-geo-alt text-info" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-muted">Alerts</h6>
+                                <h2 class="card-title mb-0 text-danger">{{ .alertsCount }}</h2>
+                            </div>
+                            <div class="bg-danger bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-exclamation-triangle text-danger" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-map me-2"></i>Device Locations Map
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="map"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Devices Table -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-list-ul me-2"></i>Recent Devices Activity
+                        </h5>
+                        <a href="/devices" class="btn btn-sm btn-primary">View All</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Location</th>
+                                        <th>Status</th>
+                                        <th>Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {{ range .deviceLocations }}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-cpu text-primary me-2"></i>
+                                                <div>
+                                                    <strong>{{ .name }}</strong><br>
+                                                    <small class="text-muted">{{ .deviceID }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <i class="bi bi-geo-alt text-info me-1"></i>{{ .location }}
+                                        </td>
+                                        <td>
+                                            {{ if eq .status "active" }}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>Active
+                                            </span>
+                                            {{ else }}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>Inactive
+                                            </span>
+                                            {{ end }}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info text-dark">{{ .type }}</span>
+                                        </td>
+                                    </tr>
+                                    {{ end }}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-light text-center text-lg-start mt-5 border-top">
+        <div class="text-center p-3">
+            © {{ year }} RKS-513. Project Based Learning.
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Leaflet CSS & JS (OpenStreetMap - Gratis!) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Data lokasi devices dari server
+        const deviceLocations = {{ .deviceLocations }};
+        
+        // Inisialisasi Leaflet Map
+        document.addEventListener('DOMContentLoaded', function() {
+            // Buat map centered di Batam
+            const map = L.map('map').setView([1.1045, 104.0305], 13);
+            
+            // Tambahkan tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Custom icons berdasarkan status
+            const greenIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+            
+            const redIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+            
+            // Tambahkan marker untuk setiap device
+            deviceLocations.forEach(device => {
+                const marker = L.marker([device.lat, device.lng], {
+                    icon: device.status === 'active' ? greenIcon : redIcon
+                }).addTo(map);
+                
+                // Popup info untuk setiap marker
+                const popupContent = `
+                    <div style="min-width: 200px;">
+                        <h6 class="mb-2"><strong>${device.name}</strong></h6>
+                        <p class="mb-1" style="font-size: 12px;"><strong>ID:</strong> ${device.deviceID}</p>
+                        <p class="mb-1" style="font-size: 12px;"><strong>Type:</strong> ${device.type}</p>
+                        <p class="mb-1" style="font-size: 12px;"><strong>Location:</strong> ${device.location}</p>
+                        <p class="mb-0">
+                            <span class="badge bg-${device.status === 'active' ? 'success' : 'secondary'}">
+                                ${device.status === 'active' ? 'Active' : 'Inactive'}
+                            </span>
+                        </p>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+            });
+        });
+    </script>
+</body>
+</html>
+{{ end }}
