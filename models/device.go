@@ -1,122 +1,151 @@
 package models
 
-import "time"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
 
-// Device represents a tracking device
+// FastAPI base URL - sesuaikan dengan server FastAPI kamu
+const FastAPIURL = "http://localhost:8000"
+
+// Device represents a tracking device (match dengan Firebase structure)
 type Device struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
 	DeviceID  string    `json:"device_id"`
-	Type      string    `json:"type"`
-	Status    string    `json:"status"`
-	Location  string    `json:"location"`
+	Name      string    `json:"name"`
 	Latitude  float64   `json:"latitude"`
 	Longitude float64   `json:"longitude"`
-	LastSeen  time.Time `json:"last_seen"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-// Temporary in-memory storage (ganti dengan database nanti)
-var devices = []Device{
-	{
-		ID:        1,
-		Name:      "Tracker Alpha",
-		DeviceID:  "TRK-001",
-		Type:      "GPS Tracker",
-		Status:    "active",
-		Location:  "sesuai koordinat nnt",
-		Latitude:  1.1182536894443547,
-		Longitude: 104.0469369239214,
-		LastSeen:  time.Now(),
-	},
-	{
-		ID:        2,
-		Name:      "Tracker Beta",
-		DeviceID:  "TRK-002",
-		Type:      "RFID Tag",
-		Status:    "active",
-		Location:  "sesuai koordinat nnt",
-		Latitude:  1.118015018301657,
-		Longitude: 104.04717027611171,
-		LastSeen:  time.Now().Add(-2 * time.Hour),
-	},
-	{
-		ID:        3,
-		Name:      "Tracker Gamma",
-		DeviceID:  "TRK-003",
-		Type:      "Bluetooth Beacon",
-		Status:    "inactive",
-		Location:  "sesuai koordinat nnt",
-		Latitude:  1.1181732384995504,
-		Longitude: 104.04722660250246,
-		LastSeen:  time.Now().Add(-24 * time.Hour),
-	},
-}
-
-var nextID = 4
-
-// GetAllDevices returns all devices
-func GetAllDevices() []Device {
-	return devices
-}
-
-// GetDeviceByID returns a device by ID
-func GetDeviceByID(id int) *Device {
-	for i := range devices {
-		if devices[i].ID == id {
-			return &devices[i]
-		}
+// GetAllDevices fetches all devices from FastAPI
+func GetAllDevices() ([]Device, error) {
+	resp, err := http.Get(FastAPIURL + "/barang")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch devices: %v", err)
 	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status: %d", resp.StatusCode)
+	}
+
+	var devices []Device
+	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	return devices, nil
+}
+
+// GetDeviceByID returns a device by device_id from FastAPI
+func GetDeviceByID(deviceID string) (*Device, error) {
+	url := fmt.Sprintf("%s/barang?device_id=%s", FastAPIURL, deviceID)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch device: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status: %d", resp.StatusCode)
+	}
+
+	var devices []Device
+	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("device not found")
+	}
+
+	return &devices[0], nil
+}
+
+// CreateDevice adds a new device via FastAPI
+func CreateDevice(device Device) (*Device, error) {
+	jsonData, err := json.Marshal(device)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal device: %v", err)
+	}
+
+	resp, err := http.Post(
+		FastAPIURL+"/barang",
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create device: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Return the created device
+	return &device, nil
+}
+
+// UpdateDevice updates an existing device via FastAPI
+func UpdateDevice(deviceID string, device Device) error {
+	// Set device_id
+	device.DeviceID = deviceID
+
+	jsonData, err := json.Marshal(device)
+	if err != nil {
+		return fmt.Errorf("failed to marshal device: %v", err)
+	}
+
+	// FastAPI biasanya menggunakan POST untuk update Firebase Realtime DB
+	resp, err := http.Post(
+		FastAPIURL+"/barang",
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update device: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }
 
-// CreateDevice adds a new device
-func CreateDevice(device Device) Device {
-	device.ID = nextID
-	nextID++
-	device.CreatedAt = time.Now()
-	device.UpdatedAt = time.Now()
-	device.LastSeen = time.Now()
-
-	// Default coordinates untuk Batam jika tidak diset
-	if device.Latitude == 0 && device.Longitude == 0 {
-		device.Latitude = 1.1045
-		device.Longitude = 104.0305
+// DeleteDevice removes a device via FastAPI
+func DeleteDevice(deviceID string) error {
+	// Untuk Firebase Realtime DB, kita perlu tambah endpoint DELETE di FastAPI
+	// Atau set data menjadi null
+	client := &http.Client{}
+	req, err := http.NewRequest(
+		"DELETE",
+		fmt.Sprintf("%s/barang/%s", FastAPIURL, deviceID),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
 	}
 
-	devices = append(devices, device)
-	return device
-}
-
-// UpdateDevice updates an existing device
-func UpdateDevice(id int, updatedDevice Device) bool {
-	for i := range devices {
-		if devices[i].ID == id {
-			updatedDevice.ID = id
-			updatedDevice.CreatedAt = devices[i].CreatedAt
-			updatedDevice.UpdatedAt = time.Now()
-
-			// Preserve coordinates if not updated
-			if updatedDevice.Latitude == 0 && updatedDevice.Longitude == 0 {
-				updatedDevice.Latitude = devices[i].Latitude
-				updatedDevice.Longitude = devices[i].Longitude
-			}
-
-			devices[i] = updatedDevice
-			return true
-		}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete device: %v", err)
 	}
-	return false
-}
+	defer resp.Body.Close()
 
-// DeleteDevice removes a device
-func DeleteDevice(id int) bool {
-	for i := range devices {
-		if devices[i].ID == id {
-			devices = append(devices[:i], devices[i+1:]...)
-			return true
-		}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
-	return false
+
+	return nil
 }

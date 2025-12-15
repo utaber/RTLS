@@ -24,17 +24,19 @@ func RegisterRoutes(r *gin.Engine) {
 		protected.GET("/dashboard", controllers.DashboardIndex)
 		protected.GET("/logout", controllers.Logout)
 
-		// Device routes (RESTful style)
+		// Device UI routes
 		protected.GET("/devices", controllers.DevicesIndex)
-		protected.GET("/devices/add", controllers.DeviceAddForm)
-		protected.POST("/devices/add", controllers.DeviceAdd)
-		protected.GET("/devices/:id/edit", controllers.DeviceEditForm)
-		protected.POST("/devices/:id/edit", controllers.DeviceEdit)
-		protected.GET("/devices/:id/delete", controllers.DeviceDeleteForm)
-		protected.POST("/devices/:id/delete", controllers.DeviceDelete)
 
-		// API endpoint untuk modal (get device data)
-		protected.GET("/api/devices/:id", controllers.DeviceGet)
+		// Device REST API routes (untuk modals)
+		api := protected.Group("/api/devices")
+		{
+			api.GET("/:id", controllers.DeviceGet)       // Get single device
+			api.POST("", controllers.DeviceCreate)       // Create device
+			api.PUT("/:id", controllers.DeviceUpdate)    // Update device
+			api.DELETE("/:id", controllers.DeviceDelete) // Delete device
+		}
 
+		// TODO: Tambahkan routes lain
+		// protected.GET("/history", controllers.HistoryIndex)
 	}
 }

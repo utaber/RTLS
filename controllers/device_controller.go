@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"rtls_rks513/models"
 	"strconv"
@@ -10,137 +11,167 @@ import (
 
 // DevicesIndex menampilkan daftar semua devices
 func DevicesIndex(c *gin.Context) {
-	devices := models.GetAllDevices()
-
-	// Ambil success message dari query parameter
-	successMsg := c.Query("success")
+	devices, err := models.GetAllDevices()
+	if err != nil {
+		log.Printf("Error fetching devices: %v", err)
+		c.HTML(http.StatusOK, "devices.html", gin.H{
+			"title":   "Devices",
+			"devices": []models.Device{},
+			"error":   "Failed to load devices from server",
+		})
+		return
+	}
 
 	c.HTML(http.StatusOK, "devices.html", gin.H{
 		"title":   "Devices",
 		"devices": devices,
-		"success": successMsg,
 	})
 }
 
-// DeviceGet API endpoint untuk mendapatkan data device (untuk modal)
-func DeviceGet(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Invalid device ID"})
-		return
-	}
+// ==================== REST API Endpoints ====================
 
-	device := models.GetDeviceByID(id)
-	if device != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"device":  device,
-		})
-	} else {
+// DeviceGet - GET /api/devices/:id
+func DeviceGet(c *gin.Context) {
+	deviceID := c.Param("id")
+
+	device, err := models.GetDeviceByID(deviceID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"error":   "Device not found",
 		})
+		return
 	}
-}
 
-// DeviceAddForm menampilkan form tambah device
-func DeviceAddForm(c *gin.Context) {
-	c.HTML(http.StatusOK, "add_device.html", gin.H{
-		"title": "Add Device",
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"device":  device,
 	})
 }
 
-// DeviceAdd memproses form tambah device
-func DeviceAdd(c *gin.Context) {
-	device := models.Device{
-		Name:     c.PostForm("name"),
-		DeviceID: c.PostForm("device_id"),
-		Type:     c.PostForm("type"),
-		Status:   c.PostForm("status"),
-		Location: c.PostForm("location"),
-	}
+// DeviceCreate - POST /api/devices
+func DeviceCreate(c *gin.Context) {
+	var device models.Device
 
-	models.CreateDevice(device)
+	// Parse form data
+	device.DeviceID = c.PostForm("device_id")
+	device.Name = c.PostForm("name")
+	device.Status = c.PostForm("status")
 
-	// Redirect dengan success message
-	c.Redirect(http.StatusFound, "/devices?success=Device added successfully")
-}
+	// Parse latitude & longitude
+	latStr := c.DefaultPostForm("latitude", "1.1045")
+	lngStr := c.DefaultPostForm("longitude", "104.0305")
 
-// DeviceEditForm menampilkan form edit device
-func DeviceEditForm(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		c.Redirect(http.StatusFound, "/devices")
+		log.Printf("Error parsing latitude: %v", err)
+		lat = 1.1045 // Default Batam
+	}
+
+	lng, err := strconv.ParseFloat(lngStr, 64)
+	if err != nil {
+		log.Printf("Error parsing longitude: %v", err)
+		lng = 104.0305 // Default Batam
+	}
+
+	device.Latitude = lat
+	device.Longitude = lng
+
+	// Validasi
+	if device.Name == "" || device.DeviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Name and Device ID are required",
+		})
 		return
 	}
 
-	device := models.GetDeviceByID(id)
-	if device == nil {
-		c.Redirect(http.StatusFound, "/devices")
+	_, err = models.CreateDevice(device)
+	if err != nil {
+		log.Printf("Error creating device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to create device: " + err.Error(),
+		})
 		return
 	}
 
-	c.HTML(http.StatusOK, "edit_device.html", gin.H{
-		"title":  "Edit Device",
-		"device": device,
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Device added successfully",
+		"device":  device,
 	})
 }
 
-// DeviceEdit memproses form edit device
-func DeviceEdit(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+// DeviceUpdate - PUT /api/devices/:id
+func DeviceUpdate(c *gin.Context) {
+	deviceID := c.Param("id")
+
+	var device models.Device
+	device.DeviceID = deviceID
+	device.Name = c.PostForm("name")
+	device.Status = c.PostForm("status")
+
+	// Parse latitude & longitude
+	latStr := c.DefaultPostForm("latitude", "1.1045")
+	lngStr := c.DefaultPostForm("longitude", "104.0305")
+
+	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		c.Redirect(http.StatusFound, "/devices")
-		return
+		log.Printf("Error parsing latitude: %v", err)
+		lat = 1.1045
 	}
 
-	device := models.Device{
-		Name:     c.PostForm("name"),
-		DeviceID: c.PostForm("device_id"),
-		Type:     c.PostForm("type"),
-		Status:   c.PostForm("status"),
-		Location: c.PostForm("location"),
-	}
-
-	if models.UpdateDevice(id, device) {
-		c.Redirect(http.StatusFound, "/devices?success=Device updated successfully")
-	} else {
-		c.Redirect(http.StatusFound, "/devices")
-	}
-}
-
-// DeviceDeleteForm menampilkan konfirmasi hapus device
-func DeviceDeleteForm(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	lng, err := strconv.ParseFloat(lngStr, 64)
 	if err != nil {
-		c.Redirect(http.StatusFound, "/devices")
+		log.Printf("Error parsing longitude: %v", err)
+		lng = 104.0305
+	}
+
+	device.Latitude = lat
+	device.Longitude = lng
+
+	// Validasi
+	if device.Name == "" || device.DeviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Name and Device ID are required",
+		})
 		return
 	}
 
-	device := models.GetDeviceByID(id)
-	if device == nil {
-		c.Redirect(http.StatusFound, "/devices")
+	err = models.UpdateDevice(deviceID, device)
+	if err != nil {
+		log.Printf("Error updating device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to update device: " + err.Error(),
+		})
 		return
 	}
 
-	c.HTML(http.StatusOK, "delete_device.html", gin.H{
-		"title":  "Delete Device",
-		"device": device,
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Device updated successfully",
 	})
 }
 
-// DeviceDelete memproses hapus device
+// DeviceDelete - DELETE /api/devices/:id
 func DeviceDelete(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	deviceID := c.Param("id")
+
+	err := models.DeleteDevice(deviceID)
 	if err != nil {
-		c.Redirect(http.StatusFound, "/devices")
+		log.Printf("Error deleting device: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Failed to delete device: " + err.Error(),
+		})
 		return
 	}
 
-	if models.DeleteDevice(id) {
-		c.Redirect(http.StatusFound, "/devices?success=Device deleted successfully")
-	} else {
-		c.Redirect(http.StatusFound, "/devices")
-	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Device deleted successfully",
+	})
 }
