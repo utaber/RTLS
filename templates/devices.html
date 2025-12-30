@@ -5,287 +5,361 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .title }} - RTLS</title>
+
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="/dashboard">Real Time Location System RKS513</a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-                <span class="navbar-toggler-icon"></span>
-            </button>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow sticky-top">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/dashboard">
+            <i class="bi bi-geo-alt-fill me-2"></i>
+            <span class="d-none d-sm-inline">PBL_RKS513 RTLS</span>
+            <span class="d-inline d-sm-none">RTLS</span>
+        </a>
 
-            <div class="collapse navbar-collapse" id="navbarContent">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/dashboard">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/devices">Devices</a>
-                    </li>
-                </ul>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-                <a href="/logout" class="btn btn-outline-light">Logout</a>
-            </div>
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/dashboard">
+                        <i class="bi bi-speedometer2 me-1"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="/devices">
+                        <i class="bi bi-cpu me-1"></i>
+                        <span>Devices</span>
+                    </a>
+                </li>
+            </ul>
+
+            <a href="/logout" class="btn btn-outline-light">
+                <i class="bi bi-box-arrow-right me-1"></i>
+                <span>Logout</span>
+            </a>
         </div>
-    </nav>
+    </div>
+</nav>
 
-    <main class="container-fluid py-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="mb-0">Devices Management</h2>
-                <p class="text-muted mb-0">Manage all your tracking devices</p>
-            </div>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
-                <i class="bi bi-plus-circle me-2"></i>Add Device
+<main class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-cpu me-2"></i>
+            Device Management
+        </h2>
+        <div class="d-none d-md-block">
+            <small class="text-muted">Total: {{ len .devices }} devices</small>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alertContainer"></div>
+
+    <!-- Device List - Responsive Table/Card Layout -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i> Device List</h5>
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
+                <i class="bi bi-plus-circle"></i>
+                <span class="d-none d-md-inline ms-1">Add Device</span>
             </button>
         </div>
 
-        <!-- Alert Container -->
-        <div id="alertContainer"></div>
-
-        <div class="card shadow-sm">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Device List</h5>
-                <span class="badge bg-primary">{{ len .devices }} Devices</span>
-            </div>
-            <div class="card-body">
+        <div class="card-body p-0">
+            <!-- Desktop Table View -->
+            <div class="d-none d-md-block">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle" id="deviceTable">
+                    <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>No</th>
-                                <th>Device Name</th>
-                                <th>Device ID</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Location</th>
-                                <th>Last Seen</th>
-                                <th class="text-center">Actions</th>
+                                <th width="5%">No</th>
+                                <th width="20%">Device ID</th>
+                                <th width="25%">Name</th>
+                                <th width="15%">Status</th>
+                                <th width="20%">Coordinates</th>
+                                <th width="15%" class="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {{ range $index, $device := .devices }}
-                            <tr data-id="{{ $device.ID }}">
-                                <td>{{ add $index 1 }}</td>
+                        {{ range $i, $d := .devices }}
+                            <tr>
+                                <td>{{ add $i 1 }}</td>
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        <div class="bg-primary bg-opacity-10 text-primary rounded d-flex align-items-center justify-content-center me-2" 
-                                             style="width: 35px; height: 35px;">
-                                            <i class="bi bi-cpu"></i>
+                                        <div class="bg-primary bg-opacity-10 p-2 rounded-circle me-2">
+                                            <i class="bi bi-cpu text-primary"></i>
                                         </div>
-                                        <strong>{{ $device.Name }}</strong>
+                                        <code>{{ $d.DeviceID }}</code>
                                     </div>
                                 </td>
-                                <td><code class="bg-light px-2 py-1 rounded">{{ $device.DeviceID }}</code></td>
-                                <td><span class="badge bg-info text-dark">{{ $device.Type }}</span></td>
                                 <td>
-                                    {{ if eq $device.Status "active" }}
-                                    <span class="badge bg-success">
-                                        <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>Active
+                                    <strong>{{ $d.Name }}</strong>
+                                </td>
+                                <td>
+                                    {{ if eq $d.Status "Terdeteksi" }}
+                                    <span class="badge bg-success rounded-pill">
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        Active
                                     </span>
                                     {{ else }}
-                                    <span class="badge bg-secondary">
-                                        <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>Inactive
+                                    <span class="badge bg-secondary rounded-pill">
+                                        <i class="bi bi-x-circle me-1"></i>
+                                        Inactive
                                     </span>
                                     {{ end }}
                                 </td>
                                 <td>
-                                    <i class="bi bi-geo-alt text-primary me-1"></i>{{ $device.Location }}
-                                </td>
-                                <td>
-                                    <small class="text-muted">{{ $device.LastSeen.Format "02 Jan 2006, 15:04" }}</small>
+                                    <small class="text-monospace">
+                                        {{ printf "%.5f" $d.Latitude }}, {{ printf "%.5f" $d.Longitude }}
+                                    </small>
                                 </td>
                                 <td class="text-center">
-                                    <div class="btn-group" role="group">
-                                        <button type="button" class="btn btn-sm btn-warning" onclick="openEditModal({{ $device.ID }})" title="Edit">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-danger" onclick="openDeleteModal({{ $device.ID }})" title="Delete">
-                                            <i class="bi bi-trash"></i>
+                                    <button class="btn btn-sm btn-outline-warning me-1"
+                                            onclick="openEditModal('{{ $d.DeviceID }}', '{{ $d.Name }}')">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            onclick="openDeleteModal('{{ $d.DeviceID }}', '{{ $d.Name }}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {{ else }}
+                            <tr>
+                                <td colspan="6" class="text-center py-5">
+                                    <div class="text-muted">
+                                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                        <p class="mt-3 mb-2">No devices found</p>
+                                        <small class="d-block mb-3">Add your first device to get started</small>
+                                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
+                                            <i class="bi bi-plus-circle"></i> Add Device
                                         </button>
                                     </div>
                                 </td>
                             </tr>
-                            {{ else }}
-                            <tr>
-                                <td colspan="8" class="text-center py-5">
-                                    <i class="bi bi-inbox text-muted" style="font-size: 48px;"></i>
-                                    <p class="text-muted mt-3 mb-0">No devices found</p>
-                                    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
-                                        <i class="bi bi-plus-circle me-2"></i>Add Your First Device
-                                    </button>
-                                </td>
-                            </tr>
-                            {{ end }}
+                        {{ end }}
                         </tbody>
                     </table>
                 </div>
             </div>
-        </div>
-    </main>
 
-    <!-- Add Device Modal -->
-    <div class="modal fade" id="addDeviceModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">
-                        <i class="bi bi-plus-circle me-2"></i>Add New Device
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addDeviceForm">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="add_name" class="form-label">Device Name *</label>
-                                <input type="text" class="form-control" id="add_name" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="add_device_id" class="form-label">Device ID *</label>
-                                <input type="text" class="form-control" id="add_device_id" placeholder="e.g., TRK-001" required>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="add_type" class="form-label">Device Type *</label>
-                                <select class="form-select" id="add_type" required>
-                                    <option value="">Select Type</option>
-                                    <option value="GPS Tracker">GPS Tracker</option>
-                                    <option value="RFID Tag">RFID Tag</option>
-                                    <option value="Bluetooth Beacon">Bluetooth Beacon</option>
-                                    <option value="UWB Tag">UWB Tag</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="add_status" class="form-label">Status *</label>
-                                <select class="form-select" id="add_status" required>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="add_location" class="form-label">Location *</label>
-                            <input type="text" class="form-control" id="add_location" placeholder="e.g., Warehouse A" required>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="saveDevice()">
-                        <i class="bi bi-save me-2"></i>Save Device
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Edit Device Modal -->
-    <div class="modal fade" id="editDeviceModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title">
-                        <i class="bi bi-pencil-square me-2"></i>Edit Device
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="editDeviceForm">
-                        <input type="hidden" id="edit_id">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="edit_name" class="form-label">Device Name *</label>
-                                <input type="text" class="form-control" id="edit_name" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="edit_device_id" class="form-label">Device ID *</label>
-                                <input type="text" class="form-control" id="edit_device_id" required>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="edit_type" class="form-label">Device Type *</label>
-                                <select class="form-select" id="edit_type" required>
-                                    <option value="">Select Type</option>
-                                    <option value="GPS Tracker">GPS Tracker</option>
-                                    <option value="RFID Tag">RFID Tag</option>
-                                    <option value="Bluetooth Beacon">Bluetooth Beacon</option>
-                                    <option value="UWB Tag">UWB Tag</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="edit_status" class="form-label">Status *</label>
-                                <select class="form-select" id="edit_status" required>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_location" class="form-label">Location *</label>
-                            <input type="text" class="form-control" id="edit_location" required>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-warning" onclick="updateDevice()">
-                        <i class="bi bi-save me-2"></i>Update Device
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Device Modal -->
-    <div class="modal fade" id="deleteDeviceModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">
-                        <i class="bi bi-exclamation-triangle me-2"></i>Delete Device
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="delete_id">
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-circle me-2"></i>
-                        <strong>Warning!</strong> This action cannot be undone.
-                    </div>
-                    <p>Are you sure you want to delete this device?</p>
-                    <div class="card bg-light">
+            <!-- Mobile Card View -->
+            <div class="d-md-none">
+                <div class="p-3">
+                    {{ range $i, $d := .devices }}
+                    <div class="card mb-3 border-start border-4 {{ if eq $d.Status "Terdeteksi" }}border-success{{ else }}border-secondary{{ end }}">
                         <div class="card-body">
-                            <p class="mb-1"><strong>Device:</strong> <span id="delete_name"></span></p>
-                            <p class="mb-0"><strong>Device ID:</strong> <code id="delete_device_id"></code></p>
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <span class="badge bg-primary rounded-pill mb-2">#{{ add $i 1 }}</span>
+                                    <h6 class="card-title mb-1">{{ $d.Name }}</h6>
+                                    <small class="text-muted"><code>{{ $d.DeviceID }}</code></small>
+                                </div>
+                                <div>
+                                    {{ if eq $d.Status "Terdeteksi" }}
+                                    <span class="badge bg-success">Active</span>
+                                    {{ else }}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                    {{ end }}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1">
+                                    <i class="bi bi-geo-alt me-1"></i> Location
+                                </small>
+                                <div class="bg-light p-2 rounded">
+                                    <small>{{ printf "%.5f" $d.Latitude }}, {{ printf "%.5f" $d.Longitude }}</small>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-warning flex-fill"
+                                        onclick="openEditModal('{{ $d.DeviceID }}', '{{ $d.Name }}')">
+                                    <i class="bi bi-pencil me-1"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger flex-fill"
+                                        onclick="openDeleteModal('{{ $d.DeviceID }}', '{{ $d.Name }}')">
+                                    <i class="bi bi-trash me-1"></i> Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">
-                        <i class="bi bi-trash me-2"></i>Yes, Delete
-                    </button>
+                    {{ else }}
+                    <div class="text-center py-5">
+                        <div class="text-muted">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-3 mb-2">No devices found</p>
+                            <small class="d-block mb-3">Add your first device to get started</small>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
+                                <i class="bi bi-plus-circle"></i> Add Device
+                            </button>
+                        </div>
+                    </div>
+                    {{ end }}
                 </div>
             </div>
         </div>
     </div>
+</main>
 
-    <footer class="bg-light text-center text-lg-start mt-5 border-top">
-        <div class="text-center p-3">
-            © 2025 RKS-513. Project Based Learning.
+<footer class="container-fluid mt-4 mb-3">
+    <div class="row">
+        <div class="col-md-6">
+            <p class="text-muted mb-1">
+                <i class="bi bi-c-circle"></i> RKS-513 Project Based Learning
+            </p>
         </div>
-    </footer>
+        <div class="col-md-6 text-md-end">
+            <p class="text-muted mb-1">
+                <i class="bi bi-cpu"></i> Total Devices: {{ len .devices }}
+            </p>
+        </div>
+    </div>
+</footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/devices.js"></script>
+<!-- ADD MODAL -->
+<div class="modal fade" id="addDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Add New Device
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addDeviceForm">
+                    <div class="mb-3">
+                        <label for="add_name" class="form-label fw-semibold">
+                            <i class=></i> Device Name *
+                        </label>
+                        <input type="text" id="add_name" class="form-control" 
+                               placeholder="e.g., Main Entrance Tracker" required>
+                        <div class="form-text">
+                            Enter a descriptive name for the device
+                        </div>
+                    </div>
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <small><strong>Auto-generated:</strong> Device ID, coordinates, and status will be set automatically.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveDevice()">
+                    <i class="bi bi-check-circle me-1"></i> Save Device
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal fade" id="editDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>
+                    Edit Device
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editDeviceForm">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            <i class=></i> Device ID
+                        </label>
+                        <input type="text" id="edit_device_id" class="form-control bg-light" disabled>
+                        <div class="form-text">Device ID cannot be changed</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_name" class="form-label fw-semibold">
+                            <i class="bi bi-tag me-1"></i> Device Name *
+                        </label>
+                        <input type="text" id="edit_name" class="form-control" 
+                               placeholder="Enter new device name" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-warning" onclick="updateDevice()">
+                    <i class="bi bi-check-circle me-1"></i> Update Device
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal fade" id="deleteDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="bi bi-exclamation-circle text-danger" style="font-size: 4rem;"></i>
+                </div>
+                <p class="text-center fs-5">Are you sure you want to delete this device?</p>
+
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <input id="delete_device_id" type="hidden">
+                        <p class="mb-2">
+                            <strong>Device Name:</strong> 
+                            <span id="delete_name" class="text-danger fw-bold"></span>
+                        </p>
+                        <p class="mb-0">
+                            <strong>Device ID:</strong> 
+                            <code id="delete_id" class="text-danger"></code>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                    <i class="bi bi-trash me-1"></i> Yes, Delete It
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS - LOAD FIRST -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Custom JS - devices.js -->
+<script src="/static/js/devices.js"></script>
+
 </body>
 </html>
 {{ end }}

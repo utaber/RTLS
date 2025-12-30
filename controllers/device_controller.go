@@ -1,41 +1,78 @@
 package controllers
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
-	"rtls_rks513/models"
-	"strconv"
 
+	"firebase.google.com/go/v4/db"
 	"github.com/gin-gonic/gin"
 )
 
-// DevicesIndex menampilkan daftar semua devices
-func DevicesIndex(c *gin.Context) {
-	devices, err := models.GetAllDevices()
-	if err != nil {
+type DeviceController struct {
+	DB *db.Client
+}
+
+// Device struct untuk response
+type Device struct {
+	DeviceID  string  `json:"device_id"`
+	Name      string  `json:"name"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Status    string  `json:"status"`
+}
+
+func NewDeviceController(dbClient *db.Client) *DeviceController {
+	return &DeviceController{DB: dbClient}
+}
+
+// ShowDevices menampilkan halaman devices
+func (dc *DeviceController) ShowDevices(c *gin.Context) {
+	ctx := context.Background()
+	ref := dc.DB.NewRef("Barang")
+
+	var devicesMap map[string]map[string]interface{}
+	if err := ref.Get(ctx, &devicesMap); err != nil {
 		log.Printf("Error fetching devices: %v", err)
 		c.HTML(http.StatusOK, "devices.html", gin.H{
 			"title":   "Devices",
-			"devices": []models.Device{},
-			"error":   "Failed to load devices from server",
+			"devices": []Device{},
 		})
 		return
 	}
 
+	// Convert map to slice of Device structs
+	deviceList := []Device{}
+	for deviceID, deviceData := range devicesMap {
+		status, _ := deviceData["status"].(string)
+		name, _ := deviceData["name"].(string)
+		lat, _ := deviceData["latitude"].(float64)
+		lng, _ := deviceData["longitude"].(float64)
+
+		deviceList = append(deviceList, Device{
+			DeviceID:  deviceID,
+			Name:      name,
+			Latitude:  lat,
+			Longitude: lng,
+			Status:    status,
+		})
+	}
+
 	c.HTML(http.StatusOK, "devices.html", gin.H{
 		"title":   "Devices",
-		"devices": devices,
+		"devices": deviceList,
 	})
 }
 
-// ==================== REST API Endpoints ====================
-
-// DeviceGet - GET /api/devices/:id
-func DeviceGet(c *gin.Context) {
+// DeviceGet mengambil detail device berdasarkan ID
+func (dc *DeviceController) DeviceGet(c *gin.Context) {
 	deviceID := c.Param("id")
+	ctx := context.Background()
+	ref := dc.DB.NewRef("Barang/" + deviceID)
 
-	device, err := models.GetDeviceByID(deviceID)
-	if err != nil {
+	var device map[string]interface{}
+	if err := ref.Get(ctx, &device); err != nil || device == nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"error":   "Device not found",
@@ -45,107 +82,99 @@ func DeviceGet(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"device":  device,
+		"data": gin.H{
+			"device_id": deviceID,
+			"name":      device["name"],
+			"latitude":  device["latitude"],
+			"longitude": device["longitude"],
+			"status":    device["status"],
+		},
 	})
 }
 
-// DeviceCreate - POST /api/devices
-func DeviceCreate(c *gin.Context) {
-	var device models.Device
-
-	// Parse form data
-	device.DeviceID = c.PostForm("device_id")
-	device.Name = c.PostForm("name")
-	device.Status = c.PostForm("status")
-
-	// Parse latitude & longitude
-	latStr := c.DefaultPostForm("latitude", "1.1045")
-	lngStr := c.DefaultPostForm("longitude", "104.0305")
-
-	lat, err := strconv.ParseFloat(latStr, 64)
-	if err != nil {
-		log.Printf("Error parsing latitude: %v", err)
-		lat = 1.1045 // Default Batam
+// DeviceCreate membuat device baru
+func (dc *DeviceController) DeviceCreate(c *gin.Context) {
+	var input struct {
+		Name string `json:"name" binding:"required"`
 	}
 
-	lng, err := strconv.ParseFloat(lngStr, 64)
-	if err != nil {
-		log.Printf("Error parsing longitude: %v", err)
-		lng = 104.0305 // Default Batam
-	}
-
-	device.Latitude = lat
-	device.Longitude = lng
-
-	// Validasi
-	if device.Name == "" || device.DeviceID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Name and Device ID are required",
+			"error":   "Device name is required",
 		})
 		return
 	}
 
-	_, err = models.CreateDevice(device)
+	ctx := context.Background()
+
+	// Generate device ID
+	deviceID := generateDeviceID(dc.DB)
+
+	// Default values untuk device baru
+	ref := dc.DB.NewRef("Barang/" + deviceID)
+	err := ref.Set(ctx, map[string]interface{}{
+		"name":      input.Name,
+		"latitude":  1.1045,   // Default Batam
+		"longitude": 104.0305, // Default Batam
+		"status":    "Tidak_Terdeteksi",
+	})
+
 	if err != nil {
 		log.Printf("Error creating device: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to create device: " + err.Error(),
+			"error":   "Failed to create device",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Device added successfully",
-		"device":  device,
+	c.JSON(http.StatusCreated, gin.H{
+		"success":   true,
+		"message":   "Device created successfully",
+		"device_id": deviceID,
 	})
 }
 
-// DeviceUpdate - PUT /api/devices/:id
-func DeviceUpdate(c *gin.Context) {
+// DeviceUpdate update device berdasarkan ID
+func (dc *DeviceController) DeviceUpdate(c *gin.Context) {
 	deviceID := c.Param("id")
 
-	var device models.Device
-	device.DeviceID = deviceID
-	device.Name = c.PostForm("name")
-	device.Status = c.PostForm("status")
-
-	// Parse latitude & longitude
-	latStr := c.DefaultPostForm("latitude", "1.1045")
-	lngStr := c.DefaultPostForm("longitude", "104.0305")
-
-	lat, err := strconv.ParseFloat(latStr, 64)
-	if err != nil {
-		log.Printf("Error parsing latitude: %v", err)
-		lat = 1.1045
+	var input struct {
+		Name string `json:"name"`
 	}
 
-	lng, err := strconv.ParseFloat(lngStr, 64)
-	if err != nil {
-		log.Printf("Error parsing longitude: %v", err)
-		lng = 104.0305
-	}
-
-	device.Latitude = lat
-	device.Longitude = lng
-
-	// Validasi
-	if device.Name == "" || device.DeviceID == "" {
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Name and Device ID are required",
+			"error":   "Invalid request data",
 		})
 		return
 	}
 
-	err = models.UpdateDevice(deviceID, device)
-	if err != nil {
+	ctx := context.Background()
+	ref := dc.DB.NewRef("Barang/" + deviceID)
+
+	// Cek apakah device exist
+	var existing map[string]interface{}
+	if err := ref.Get(ctx, &existing); err != nil || existing == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Device not found",
+		})
+		return
+	}
+
+	// Update hanya field name
+	updates := map[string]interface{}{
+		"name": input.Name,
+	}
+
+	if err := ref.Update(ctx, updates); err != nil {
 		log.Printf("Error updating device: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to update device: " + err.Error(),
+			"error":   "Failed to update device",
 		})
 		return
 	}
@@ -156,22 +185,80 @@ func DeviceUpdate(c *gin.Context) {
 	})
 }
 
-// DeviceDelete - DELETE /api/devices/:id
-func DeviceDelete(c *gin.Context) {
+// DeviceDelete hapus device berdasarkan ID
+func (dc *DeviceController) DeviceDelete(c *gin.Context) {
 	deviceID := c.Param("id")
+	ctx := context.Background()
+	ref := dc.DB.NewRef("Barang/" + deviceID)
 
-	err := models.DeleteDevice(deviceID)
-	if err != nil {
+	// Cek apakah device exist
+	var existing map[string]interface{}
+	if err := ref.Get(ctx, &existing); err != nil || existing == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error":   "Device not found",
+		})
+		return
+	}
+
+	if err := ref.Delete(ctx); err != nil {
 		log.Printf("Error deleting device: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to delete device: " + err.Error(),
+			"error":   "Failed to delete device",
 		})
 		return
+	}
+
+	// Optional: Tambahkan device ID ke reusable queue
+	reusableRef := dc.DB.NewRef("meta/reusable_ids")
+	var reusableIDs []string
+	if err := reusableRef.Get(ctx, &reusableIDs); err == nil && reusableIDs != nil {
+		reusableIDs = append(reusableIDs, deviceID)
+		reusableRef.Set(ctx, reusableIDs)
+	} else {
+		reusableRef.Set(ctx, []string{deviceID})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Device deleted successfully",
 	})
+}
+
+// Helper function untuk generate device ID dengan FIFO reuse
+func generateDeviceID(dbClient *db.Client) string {
+	ctx := context.Background()
+	reusableRef := dbClient.NewRef("meta/reusable_ids")
+	counterRef := dbClient.NewRef("meta/device_counter")
+
+	// Cek apakah ada reusable IDs
+	var reusableIDs []string
+	if err := reusableRef.Get(ctx, &reusableIDs); err == nil && len(reusableIDs) > 0 {
+		// Ambil ID pertama (FIFO)
+		deviceID := reusableIDs[0]
+
+		// Hapus dari list
+		if len(reusableIDs) > 1 {
+			reusableRef.Set(ctx, reusableIDs[1:])
+		} else {
+			reusableRef.Delete(ctx)
+		}
+
+		log.Printf("Reusing device ID: %s", deviceID)
+		return deviceID
+	}
+
+	// Jika tidak ada reusable ID, generate baru
+	var counter int
+	if err := counterRef.Get(ctx, &counter); err != nil {
+		counter = 0
+	}
+
+	counter++
+	counterRef.Set(ctx, counter)
+
+	deviceID := fmt.Sprintf("BOX-%03d", counter)
+	log.Printf("Generated new device ID: %s", deviceID)
+	return deviceID
 }

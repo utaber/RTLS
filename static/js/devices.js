@@ -1,177 +1,256 @@
-// devices.js - Handle CRUD operations with modals + REST API (Firebase)
+// devices.js - Device management functionality
+console.log('devices.js loaded successfully');
 
-// Show alert message
-function showAlert(type, message) {
+// Global variables untuk menyimpan data sementara
+let currentEditDeviceId = null;
+let currentDeleteDeviceId = null;
+
+// Function untuk show alert
+function showAlert(message, type = 'success') {
     const alertContainer = document.getElementById('alertContainer');
-    const alertHtml = `
+    if (!alertContainer) return;
+
+    const alertHTML = `
         <div class="alert alert-${type} alert-dismissible fade show" role="alert">
             <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     `;
-    
-    alertContainer.innerHTML = alertHtml;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    
+
+    alertContainer.innerHTML = alertHTML;
+
+    // Auto hide after 5 seconds
     setTimeout(() => {
         const alert = alertContainer.querySelector('.alert');
-        if (alert) alert.remove();
+        if (alert) {
+            alert.classList.remove('show');
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 150);
+        }
     }, 5000);
 }
 
-// Save new device (REST API)
+// Function untuk save device (Create)
 async function saveDevice() {
-    const formData = new FormData();
-    formData.append('device_id', document.getElementById('add_device_id').value);
-    formData.append('name', document.getElementById('add_name').value);
-    formData.append('status', document.getElementById('add_status').value);
-    formData.append('latitude', document.getElementById('add_latitude').value || '1.1045');
-    formData.append('longitude', document.getElementById('add_longitude').value || '104.0305');
+    console.log('saveDevice called');
     
+    const name = document.getElementById('add_name').value.trim();
+
+    if (!name) {
+        showAlert('Please enter device name', 'danger');
+        return;
+    }
+
     try {
         const response = await fetch('/api/devices', {
             method: 'POST',
-            body: formData
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: name
+            })
         });
-        
+
         const result = await response.json();
-        
-        if (result.success) {
+
+        if (response.ok && result.success) {
+            // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('addDeviceModal'));
-            modal.hide();
-            showAlert('success', result.message);
-            setTimeout(() => location.reload(), 1000);
+            if (modal) modal.hide();
+
+            // Clear form
+            document.getElementById('addDeviceForm').reset();
+
+            // Show success alert
+            showAlert(`Device "${name}" created successfully with ID: ${result.device_id}`, 'success');
+
+            // Reload page after short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } else {
-            showAlert('danger', result.error || 'Failed to add device');
+            showAlert(result.error || 'Failed to create device', 'danger');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showAlert('danger', 'An error occurred while adding device');
+        console.error('Error creating device:', error);
+        showAlert('Error creating device. Please try again.', 'danger');
     }
 }
 
-// Open edit modal and load device data (REST API)
-async function openEditModal(deviceId) {
-    try {
-        const response = await fetch(`/api/devices/${deviceId}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            const device = result.device;
-            
-            document.getElementById('edit_device_id').value = device.device_id;
-            document.getElementById('edit_name').value = device.name;
-            document.getElementById('edit_status').value = device.status;
-            document.getElementById('edit_latitude').value = device.latitude;
-            document.getElementById('edit_longitude').value = device.longitude;
-            
-            const modal = new bootstrap.Modal(document.getElementById('editDeviceModal'));
-            modal.show();
-        } else {
-            showAlert('danger', 'Failed to load device data');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showAlert('danger', 'An error occurred while loading device data');
-    }
+// Function untuk open edit modal
+async function openEditModal(deviceId, deviceName) {
+    console.log('openEditModal called:', deviceId, deviceName);
+    
+    currentEditDeviceId = deviceId;
+
+    // Set values in modal
+    document.getElementById('edit_device_id').value = deviceId;
+    document.getElementById('edit_name').value = deviceName;
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('editDeviceModal'));
+    modal.show();
 }
 
-// Update device (REST API)
+// Function untuk update device
 async function updateDevice() {
-    const deviceId = document.getElementById('edit_device_id').value;
-    const formData = new FormData();
-    formData.append('device_id', deviceId);
-    formData.append('name', document.getElementById('edit_name').value);
-    formData.append('status', document.getElementById('edit_status').value);
-    formData.append('latitude', document.getElementById('edit_latitude').value);
-    formData.append('longitude', document.getElementById('edit_longitude').value);
+    console.log('updateDevice called');
     
+    if (!currentEditDeviceId) {
+        showAlert('No device selected', 'danger');
+        return;
+    }
+
+    const name = document.getElementById('edit_name').value.trim();
+
+    if (!name) {
+        showAlert('Please enter device name', 'danger');
+        return;
+    }
+
     try {
-        const response = await fetch(`/api/devices/${deviceId}`, {
+        const response = await fetch(`/api/devices/${currentEditDeviceId}`, {
             method: 'PUT',
-            body: formData
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: name
+            })
         });
-        
+
         const result = await response.json();
-        
-        if (result.success) {
+
+        if (response.ok && result.success) {
+            // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('editDeviceModal'));
-            modal.hide();
-            showAlert('success', result.message);
-            setTimeout(() => location.reload(), 1000);
+            if (modal) modal.hide();
+
+            // Clear form
+            document.getElementById('editDeviceForm').reset();
+            currentEditDeviceId = null;
+
+            // Show success alert
+            showAlert(`Device updated successfully`, 'success');
+
+            // Reload page after short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } else {
-            showAlert('danger', result.error || 'Failed to update device');
+            showAlert(result.error || 'Failed to update device', 'danger');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showAlert('danger', 'An error occurred while updating device');
+        console.error('Error updating device:', error);
+        showAlert('Error updating device. Please try again.', 'danger');
     }
 }
 
-// Open delete modal and load device info (REST API)
-async function openDeleteModal(deviceId) {
-    try {
-        const response = await fetch(`/api/devices/${deviceId}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            const device = result.device;
-            
-            document.getElementById('delete_device_id').value = device.device_id;
-            document.getElementById('delete_name').textContent = device.name;
-            document.getElementById('delete_id').textContent = device.device_id;
-            
-            const modal = new bootstrap.Modal(document.getElementById('deleteDeviceModal'));
-            modal.show();
-        } else {
-            showAlert('danger', 'Failed to load device data');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showAlert('danger', 'An error occurred while loading device data');
-    }
-}
-
-// Confirm delete (REST API)
-async function confirmDelete() {
-    const deviceId = document.getElementById('delete_device_id').value;
+// Function untuk open delete modal
+function openDeleteModal(deviceId, deviceName) {
+    console.log('openDeleteModal called:', deviceId, deviceName);
     
+    currentDeleteDeviceId = deviceId;
+
+    // Set values in modal
+    document.getElementById('delete_device_id').value = deviceId;
+    document.getElementById('delete_name').textContent = deviceName;
+    document.getElementById('delete_id').textContent = deviceId;
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('deleteDeviceModal'));
+    modal.show();
+}
+
+// Function untuk confirm delete
+async function confirmDelete() {
+    console.log('confirmDelete called');
+    
+    if (!currentDeleteDeviceId) {
+        showAlert('No device selected', 'danger');
+        return;
+    }
+
     try {
-        const response = await fetch(`/api/devices/${deviceId}`, {
+        const response = await fetch(`/api/devices/${currentDeleteDeviceId}`, {
             method: 'DELETE'
         });
-        
+
         const result = await response.json();
-        
-        if (result.success) {
+
+        if (response.ok && result.success) {
+            // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('deleteDeviceModal'));
-            modal.hide();
-            showAlert('success', result.message);
-            setTimeout(() => location.reload(), 1000);
+            if (modal) modal.hide();
+
+            currentDeleteDeviceId = null;
+
+            // Show success alert
+            showAlert(`Device deleted successfully`, 'success');
+
+            // Reload page after short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } else {
-            showAlert('danger', result.error || 'Failed to delete device');
+            showAlert(result.error || 'Failed to delete device', 'danger');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showAlert('danger', 'An error occurred while deleting device');
+        console.error('Error deleting device:', error);
+        showAlert('Error deleting device. Please try again.', 'danger');
     }
 }
 
-// Reset form when modal is hidden
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    const addModal = document.getElementById('addDeviceModal');
-    const editModal = document.getElementById('editDeviceModal');
-    
-    if (addModal) {
-        addModal.addEventListener('hidden.bs.modal', function () {
-            document.getElementById('addDeviceForm').reset();
+    console.log('devices.js initialized');
+
+    // Add event listeners untuk form submission dengan Enter key
+    const addNameInput = document.getElementById('add_name');
+    if (addNameInput) {
+        addNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveDevice();
+            }
         });
     }
-    
-    if (editModal) {
-        editModal.addEventListener('hidden.bs.modal', function () {
-            document.getElementById('editDeviceForm').reset();
+
+    const editNameInput = document.getElementById('edit_name');
+    if (editNameInput) {
+        editNameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                updateDevice();
+            }
         });
     }
+
+    // Clear modals when closed
+    document.getElementById('addDeviceModal')?.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('addDeviceForm').reset();
+    });
+
+    document.getElementById('editDeviceModal')?.addEventListener('hidden.bs.modal', function() {
+        document.getElementById('editDeviceForm').reset();
+        currentEditDeviceId = null;
+    });
+
+    document.getElementById('deleteDeviceModal')?.addEventListener('hidden.bs.modal', function() {
+        currentDeleteDeviceId = null;
+    });
+
+    console.log('devices.js ready');
 });
+
+// Export functions untuk global use
+window.saveDevice = saveDevice;
+window.updateDevice = updateDevice;
+window.openEditModal = openEditModal;
+window.openDeleteModal = openDeleteModal;
+window.confirmDelete = confirmDelete;
+
+console.log('devices.js functions exported to window');

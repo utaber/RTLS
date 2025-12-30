@@ -5,260 +5,359 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .title }} - RTLS</title>
+
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/style.css">
-    <style>
-        #map {
-            height: 500px;
-            width: 100%;
-            border-radius: 8px;
-        }
-    </style>
 </head>
 
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="/dashboard">Real Time Location System RKS513</a>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow sticky-top">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/dashboard">
+            <i class="bi bi-geo-alt-fill me-2"></i>
+            <span class="d-none d-sm-inline">PBL_RKS513 RTLS</span>
+            <span class="d-inline d-sm-none">RTLS</span>
+        </a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-                <span class="navbar-toggler-icon"></span>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link active" href="/dashboard">
+                        <i class="bi bi-speedometer2 me-1"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/devices">
+                        <i class="bi bi-cpu me-1"></i>
+                        <span>Devices</span>
+                    </a>
+                </li>
+            </ul>
+
+            <a href="/logout" class="btn btn-outline-light">
+                <i class="bi bi-box-arrow-right me-1"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<main class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-speedometer2 me-2"></i>
+            Dashboard Overview
+        </h2>
+        <div class="d-none d-md-block">
+            <small class="text-muted">Last updated: <span id="lastUpdateTime">Now</span></small>
+        </div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card shadow-sm h-100 border-0 bg-primary bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Total Devices</h6>
+                            <h2 class="card-title mb-0 text-primary">{{ .totalDevices }}</h2>
+                            <small class="text-muted">{{ .activeDevices }} active</small>
+                        </div>
+                        <div class="bg-primary bg-opacity-25 p-3 rounded-circle">
+                            <i class="bi bi-cpu text-primary" style="font-size: 28px;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card shadow-sm h-100 border-0 bg-success bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Active Devices</h6>
+                            <h2 class="card-title mb-0 text-success">{{ .activeDevices }}</h2>
+                            <small class="text-muted">
+                                {{ if gt .totalDevices 0 }}
+                                    {{ .activePercentage }}% of total
+                                {{ else }}
+                                    0% of total
+                                {{ end }}
+                            </small>
+                        </div>
+                        <div class="bg-success bg-opacity-25 p-3 rounded-circle">
+                            <i class="bi bi-check-circle text-success" style="font-size: 28px;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card shadow-sm h-100 border-0 bg-info bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Locations Tracked</h6>
+                            <h2 class="card-title mb-0 text-info">{{ .locationsCount }}</h2>
+                            <small class="text-muted">Tracking active devices</small>
+                        </div>
+                        <div class="bg-info bg-opacity-25 p-3 rounded-circle">
+                            <i class="bi bi-geo-alt text-info" style="font-size: 28px;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card shadow-sm h-100 border-0 bg-danger bg-opacity-10">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2 text-muted">Alerts</h6>
+                            <h2 class="card-title mb-0 text-danger">{{ .alertsCount }}</h2>
+                            <small class="text-muted">
+                                {{ if gt .alertsCount 0 }}
+                                    Attention needed
+                                {{ else }}
+                                    All clear
+                                {{ end }}
+                            </small>
+                        </div>
+                        <div class="bg-danger bg-opacity-25 p-3 rounded-circle">
+                            <i class="bi bi-exclamation-triangle text-danger" style="font-size: 28px;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAP SECTION -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-map me-2"></i> Device Locations Map</h5>
+            <button class="btn btn-sm btn-outline-primary" id="refreshMapBtn">
+                <i class="bi bi-arrow-clockwise"></i>
+                <span class="d-none d-sm-inline">Refresh</span>
             </button>
-
-            <div class="collapse navbar-collapse" id="navbarContent">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/dashboard">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/devices">Devices</a>
-                    </li>
-                </ul>
-
-                <a href="/logout" class="btn btn-outline-light">Logout</a>
-            </div>
         </div>
-    </nav>
+        <div class="card-body p-0">
+            <div id="map"></div>
+        </div>
+    </div>
 
-    <main class="container-fluid py-4">
-        <h2 class="mb-4">Dashboard Overview</h2>
-
-        <!-- Statistics Cards -->
-        <div class="row g-3 mb-4">
-            <div class="col-md-3">
-                <div class="card shadow-sm h-100 border-0">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Total Devices</h6>
-                                <h2 class="card-title mb-0 text-primary">{{ .totalDevices }}</h2>
-                            </div>
-                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
-                                <i class="bi bi-cpu text-primary" style="font-size: 24px;"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card shadow-sm h-100 border-0">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Active Devices</h6>
-                                <h2 class="card-title mb-0 text-success">{{ .activeDevices }}</h2>
-                            </div>
-                            <div class="bg-success bg-opacity-10 p-3 rounded-circle">
-                                <i class="bi bi-check-circle text-success" style="font-size: 24px;"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card shadow-sm h-100 border-0">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Locations Tracked</h6>
-                                <h2 class="card-title mb-0 text-info">{{ .locationsCount }}</h2>
-                            </div>
-                            <div class="bg-info bg-opacity-10 p-3 rounded-circle">
-                                <i class="bi bi-geo-alt text-info" style="font-size: 24px;"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card shadow-sm h-100 border-0">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Alerts</h6>
-                                <h2 class="card-title mb-0 text-danger">{{ .alertsCount }}</h2>
-                            </div>
-                            <div class="bg-danger bg-opacity-10 p-3 rounded-circle">
-                                <i class="bi bi-exclamation-triangle text-danger" style="font-size: 24px;"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- RECENT ACTIVITY-->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i> Recent Devices Activity</h5>
+            <div>
+                <a href="/devices" class="btn btn-sm btn-primary">
+                    <i class="bi bi-cpu"></i>
+                    <span class="d-none d-md-inline">Manage Devices</span>
+                    <span class="d-inline d-md-none">View All</span>
+                </a>
             </div>
         </div>
 
-        <!-- Map Section -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0">
-                            <i class="bi bi-map me-2"></i>Device Locations Map
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="map"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Devices Table -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-list-ul me-2"></i>Recent Devices Activity
-                        </h5>
-                        <a href="/devices" class="btn btn-sm btn-primary">View All</a>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Device</th>
-                                        <th>Location</th>
-                                        <th>Status</th>
-                                        <th>Type</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {{ range .deviceLocations }}
-                                    <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <i class="bi bi-cpu text-primary me-2"></i>
-                                                <div>
-                                                    <strong>{{ .name }}</strong><br>
-                                                    <small class="text-muted">{{ .deviceID }}</small>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <i class="bi bi-geo-alt text-info me-1"></i>{{ .location }}
-                                        </td>
-                                        <td>
-                                            {{ if eq .status "active" }}
-                                            <span class="badge bg-success">
-                                                <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>Active
-                                            </span>
-                                            {{ else }}
-                                            <span class="badge bg-secondary">
-                                                <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i>Inactive
-                                            </span>
-                                            {{ end }}
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-info text-dark">{{ .type }}</span>
-                                        </td>
-                                    </tr>
+        <div class="card-body p-0">
+            <!-- Desktop Table View -->
+            <div class="d-none d-md-block">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="30%">Device</th>
+                                <th width="25%">Coordinates</th>
+                                <th width="20%">Status</th>
+                                <th width="25%" class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {{ range .deviceLocations }}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
+                                            <i class="bi bi-cpu text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <strong class="d-block">{{ .name }}</strong>
+                                            <small class="text-muted">{{ .deviceID }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="text-monospace">
+                                        {{ printf "%.5f" .lat }}, {{ printf "%.5f" .lng }}
+                                    </div>
+                                </td>
+                                <td>
+                                    {{ if eq .status "Terdeteksi" }}
+                                    <span class="badge bg-success rounded-pill p-2">
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        Terdeteksi
+                                    </span>
+                                    {{ else }}
+                                    <span class="badge bg-secondary rounded-pill p-2">
+                                        <i class="bi bi-x-circle me-1"></i>
+                                        Tidak Terdeteksi
+                                    </span>
                                     {{ end }}
-                                </tbody>
-                            </table>
+                                </td>
+                                <td class="text-center">
+                                    <button onclick="showOnMap('{{ .lat }}', '{{ .lng }}')" 
+                                            class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-map"></i> View on Map
+                                    </button>
+                                </td>
+                            </tr>
+                        {{ else }}
+                            <tr>
+                                <td colspan="4" class="text-center py-5">
+                                    <div class="text-muted">
+                                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                        <p class="mt-3">No device activity found</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Mobile Card View -->
+            <div class="d-md-none">
+                <div class="p-3">
+                    {{ range .deviceLocations }}
+                    <div class="device-card card mb-3 {{ if eq .status "Terdeteksi" }}active{{ else }}offline{{ end }}">
+                        <div class="card-body">
+                            <!-- Header dengan nama dan status -->
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="card-title mb-1">
+                                        <i class="bi bi-cpu me-2 text-primary"></i>
+                                        {{ .name }}
+                                    </h6>
+                                    <p class="card-text text-muted small mb-2">
+                                        <code>{{ .deviceID }}</code>
+                                    </p>
+                                </div>
+                                <div>
+                                    {{ if eq .status "Terdeteksi" }}
+                                    <span class="badge bg-success rounded-pill">
+                                        <i class="bi bi-check-circle"></i>
+                                        Active
+                                    </span>
+                                    {{ else }}
+                                    <span class="badge bg-secondary rounded-pill">
+                                        <i class="bi bi-x-circle"></i>
+                                        Offline
+                                    </span>
+                                    {{ end }}
+                                </div>
+                            </div>
+
+                            <!-- Koordinat -->
+                            <div class="mb-3">
+                                <p class="mb-1 small text-muted">
+                                    <i class="bi bi-geo-alt me-1"></i> Location
+                                </p>
+                                <div class="bg-light p-2 rounded">
+                                    <div class="text-center">
+                                        <strong class="d-block">{{ printf "%.5f" .lat }}</strong>
+                                        <strong class="d-block">{{ printf "%.5f" .lng }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Metadata dan actions -->
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted">
+                                        Device ID: {{ .deviceID }}
+                                    </small>
+                                </div>
+                                <div>
+                                    <button onclick="showOnMap('{{ .lat }}', '{{ .lng }}')" 
+                                            class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-map"></i>
+                                    </button>
+                                    <a href="/devices?device={{ .deviceID }}" 
+                                       class="btn btn-sm btn-outline-secondary ms-1">
+                                        <i class="bi bi-info-circle"></i>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                    {{ else }}
+                    <div class="text-center py-5">
+                        <div class="text-muted">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-3 mb-0">No device activity found</p>
+                            <small class="d-block">Add devices to see activity here</small>
+                            <a href="/devices" class="btn btn-primary mt-3">
+                                <i class="bi bi-plus-circle"></i> Add Device
+                            </a>
+                        </div>
+                    </div>
+                    {{ end }}
                 </div>
             </div>
         </div>
-    </main>
+    </div>
+</main>
 
-    <footer class="bg-light text-center text-lg-start mt-5 border-top">
-        <div class="text-center p-3">
-            © {{ year }} RKS-513. Project Based Learning.
+<footer class="container-fluid mt-4 mb-3">
+    <div class="row">
+        <div class="col-md-6">
+            <p class="text-muted mb-1">
+                <i class="bi bi-c-circle"></i> RKS-513 Project Based Learning
+            </p>
         </div>
-    </footer>
+        <div class="col-md-6 text-md-end">
+            <p class="text-muted mb-1">
+                <i class="bi bi-clock"></i> System Time: <span id="currentTime"></span>
+            </p>
+        </div>
+    </div>
+</footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Leaflet CSS & JS (OpenStreetMap - Gratis!) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script>
-        // Data lokasi devices dari server
-        const deviceLocations = {{ .deviceLocations }};
-        
-        // Inisialisasi Leaflet Map
-        document.addEventListener('DOMContentLoaded', function() {
-            // Buat map centered di Batam
-            const map = L.map('map').setView([1.1045, 104.0305], 13);
-            
-            // Tambahkan tile layer (OpenStreetMap)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(map);
-            
-            // Custom icons berdasarkan status
-            const greenIcon = L.icon({
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41]
-            });
-            
-            const redIcon = L.icon({
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41],
-                popupAnchor: [1, -34],
-                shadowSize: [41, 41]
-            });
-            
-            // Tambahkan marker untuk setiap device
-            deviceLocations.forEach(device => {
-                const marker = L.marker([device.lat, device.lng], {
-                    icon: device.status === 'active' ? greenIcon : redIcon
-                }).addTo(map);
-                
-                // Popup info untuk setiap marker
-                const popupContent = `
-                    <div style="min-width: 200px;">
-                        <h6 class="mb-2"><strong>${device.name}</strong></h6>
-                        <p class="mb-1" style="font-size: 12px;"><strong>ID:</strong> ${device.deviceID}</p>
-                        <p class="mb-1" style="font-size: 12px;"><strong>Type:</strong> ${device.type}</p>
-                        <p class="mb-1" style="font-size: 12px;"><strong>Location:</strong> ${device.location}</p>
-                        <p class="mb-0">
-                            <span class="badge bg-${device.status === 'active' ? 'success' : 'secondary'}">
-                                ${device.status === 'active' ? 'Active' : 'Inactive'}
-                            </span>
-                        </p>
-                    </div>
-                `;
-                
-                marker.bindPopup(popupContent);
-            });
-        });
-    </script>
+<!-- Device data from backend -->
+<script id="devices-data" type="application/json">{{ .deviceLocationsJSON | printf "%s" }}</script>
+
+<!-- JS Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Custom JS -->
+<script src="/static/js/dashboard.js"></script>
+
+<!-- Debug script -->
+<script>
+    console.log('Bootstrap loaded:', typeof bootstrap !== 'undefined');
+    console.log('Leaflet loaded:', typeof L !== 'undefined');
+    console.log('Dashboard.js loaded:', typeof initMap !== 'undefined');
+</script>
+
 </body>
 </html>
 {{ end }}

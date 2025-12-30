@@ -1,6 +1,7 @@
 /* General Styling */
 body {
     font-family: 'Segoe UI', sans-serif;
+    background-color: #f8f9fa;
 }
 
 /* Auth Card Styling */
@@ -13,14 +14,164 @@ body {
     height: 42px;
 }
 
-/* Navbar shadow */
+/* Navbar */
 .navbar {
     box-shadow: 0 2px 4px rgba(0,0,0,0.12);
 }
 
-/* Dashboard styling */
+/* Card styling */
 .card-title {
     font-size: 1.1rem;
     font-weight: 600;
 }
 
+/* Dashboard specific styles */
+#map {
+    height: 500px;
+    width: 100%;
+    border-radius: 8px;
+}
+
+/* Custom styles untuk card mobile */
+.device-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 4px solid #0d6efd;
+}
+
+.device-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.device-card.offline {
+    border-left-color: #6c757d;
+    opacity: 0.9;
+}
+
+.device-card.active {
+    border-left-color: #198754;
+}
+
+.device-card.inactive {
+    border-left-color: #6c757d;
+    opacity: 0.9;
+}
+
+.stat-card {
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.action-buttons .btn {
+    min-width: 40px;
+}
+
+/* Badge styles */
+.badge-status {
+    padding: 0.5em 1em;
+    font-size: 0.85em;
+}
+
+/* Table improvements */
+.table th {
+    font-weight: 600;
+    color: #495057;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    #map {
+        height: 350px;
+    }
+    
+    .navbar-brand {
+        font-size: 1rem;
+    }
+    
+    h2 {
+        font-size: 1.5rem;
+    }
+    
+    h3 {
+        font-size: 1.25rem;
+    }
+    
+    .stat-card .card-title {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    #map {
+        height: 300px;
+    }
+    
+    .device-card .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+}
+
+/* Modal improvements */
+.modal-header {
+    border-bottom: none;
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: none;
+    padding: 1.5rem;
+}
+
+/* Leaflet map popup styling */
+.leaflet-popup-content {
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.leaflet-popup-content b {
+    color: #0d6efd;
+}
+
+/* Responsive text */
+.text-monospace {
+    font-family: 'Courier New', monospace;
+}
+
+/* Form controls */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Alert styling */
+.alert {
+    border: none;
+    border-radius: 8px;
+}
+
+.alert-success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #664d03;
+}
+
+.alert-info {
+    background-color: #cff4fc;
+    color: #055160;
+}

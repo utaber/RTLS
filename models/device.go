@@ -6,145 +6,156 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 )
 
-// FastAPI base URL - sesuaikan dengan server FastAPI kamu
-const FastAPIURL = "http://localhost:8000"
+const FastAPIBaseURL = "http://localhost:8000"
 
-// Device represents a tracking device (match dengan Firebase structure)
 type Device struct {
-	DeviceID  string    `json:"device_id"`
-	Name      string    `json:"name"`
-	Latitude  float64   `json:"latitude"`
-	Longitude float64   `json:"longitude"`
-	Status    string    `json:"status"`
-	Timestamp time.Time `json:"timestamp,omitempty"`
+	DeviceID  string  `json:"device_id"`
+	Name      string  `json:"name"`
+	Status    string  `json:"status"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
-// GetAllDevices fetches all devices from FastAPI
+/* JWT */
+
+var jwtToken string
+
+func GetJWTToken() (string, error) {
+	if jwtToken != "" {
+		return jwtToken, nil
+	}
+
+	resp, err := http.Post(FastAPIBaseURL+"/auth/token", "application/json", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		AccessToken string `json:"access_token"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	jwtToken = result.AccessToken
+	return jwtToken, nil
+}
+
+func authRequest(method, url string, body []byte) (*http.Request, error) {
+	token, err := GetJWTToken()
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
+
+/* CRUD */
+
 func GetAllDevices() ([]Device, error) {
-	resp, err := http.Get(FastAPIURL + "/barang")
+	resp, err := http.Get(FastAPIBaseURL + "/barang")
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch devices: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status: %d", resp.StatusCode)
-	}
-
 	var devices []Device
-	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
-	}
-
-	return devices, nil
+	err = json.NewDecoder(resp.Body).Decode(&devices)
+	return devices, err
 }
 
-// GetDeviceByID returns a device by device_id from FastAPI
-func GetDeviceByID(deviceID string) (*Device, error) {
-	url := fmt.Sprintf("%s/barang?device_id=%s", FastAPIURL, deviceID)
-	resp, err := http.Get(url)
+func GetDeviceByID(id string) (*Device, error) {
+	resp, err := http.Get(FastAPIBaseURL + "/barang?device_id=" + id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch device: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status: %d", resp.StatusCode)
+	var list []Device
+	err = json.NewDecoder(resp.Body).Decode(&list)
+	if err != nil {
+		return nil, err
 	}
 
-	var devices []Device
-	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+	if len(list) == 0 {
+		return nil, fmt.Errorf("device not found: %s", id)
 	}
 
-	if len(devices) == 0 {
-		return nil, fmt.Errorf("device not found")
-	}
-
-	return &devices[0], nil
+	return &list[0], nil
 }
 
-// CreateDevice adds a new device via FastAPI
 func CreateDevice(device Device) (*Device, error) {
-	jsonData, err := json.Marshal(device)
+	payload, _ := json.Marshal(device)
+
+	req, err := authRequest("POST", FastAPIBaseURL+"/barang", payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal device: %v", err)
+		return nil, err
 	}
 
-	resp, err := http.Post(
-		FastAPIURL+"/barang",
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create device: %v", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Return the created device
-	return &device, nil
+	var created Device
+	err = json.NewDecoder(resp.Body).Decode(&created)
+	return &created, err
 }
 
-// UpdateDevice updates an existing device via FastAPI
-func UpdateDevice(deviceID string, device Device) error {
-	// Set device_id
-	device.DeviceID = deviceID
+func UpdateDevice(id string, device Device) error {
+	payload, _ := json.Marshal(map[string]string{
+		"name": device.Name,
+	})
 
-	jsonData, err := json.Marshal(device)
+	req, err := authRequest("PATCH", FastAPIBaseURL+"/barang/"+id, payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal device: %v", err)
+		return err
 	}
 
-	// FastAPI biasanya menggunakan POST untuk update Firebase Realtime DB
-	resp, err := http.Post(
-		FastAPIURL+"/barang",
-		"application/json",
-		bytes.NewBuffer(jsonData),
-	)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to update device: %v", err)
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("update failed: %s", string(body))
 	}
 
 	return nil
 }
 
-// DeleteDevice removes a device via FastAPI
-func DeleteDevice(deviceID string) error {
-	// Untuk Firebase Realtime DB, kita perlu tambah endpoint DELETE di FastAPI
-	// Atau set data menjadi null
-	client := &http.Client{}
-	req, err := http.NewRequest(
-		"DELETE",
-		fmt.Sprintf("%s/barang/%s", FastAPIURL, deviceID),
-		nil,
-	)
+func DeleteDevice(id string) error {
+	req, err := authRequest("DELETE", FastAPIBaseURL+"/barang/"+id, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
+		return err
 	}
 
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to delete device: %v", err)
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("delete failed: %s", string(body))
 	}
 
 	return nil

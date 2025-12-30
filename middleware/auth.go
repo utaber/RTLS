@@ -1,30 +1,26 @@
-package routes
+package middleware
 
 import (
-	"rtls_rks513/controllers"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterRoutes mendaftarkan semua routes aplikasi
-func RegisterRoutes(r *gin.Engine) {
-	// Public routes (tidak perlu auth)
-	public := r.Group("/")
-	{
-		public.GET("/", controllers.LoginIndex)
-		public.GET("/login", controllers.LoginIndex)
-		public.POST("/login", controllers.LoginSubmit)
-	}
+// AuthRequired mengecek apakah user sudah login
+func AuthRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
 
-	// Protected routes (perlu auth)
-	protected := r.Group("/")
-	// TODO: Uncomment setelah middleware auth dibuat
-	// protected.Use(middleware.AuthRequired())
-	{
-		protected.GET("/dashboard", controllers.DashboardIndex)
-		protected.GET("/logout", controllers.Logout)
+		// ambil cookie token
+		token, err := c.Cookie("firebase_token")
+		if err != nil || token == "" {
+			c.Redirect(http.StatusFound, "/login")
+			c.Abort()
+			return
+		}
 
-		// TODO: Tambahkan routes lain
-		protected.GET("/devices", controllers.DevicesIndex)
+		// simpan token ke context (opsional)
+		c.Set("firebase_token", token)
+
+		c.Next()
 	}
 }

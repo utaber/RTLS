@@ -7,14 +7,26 @@ import (
 	"rtls_rks513/routes"
 	"time"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found")
+	}
+
 	// Set mode (bisa pakai environment variable)
 	// gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
+
+	// Setup session
+	store := cookie.NewStore([]byte("secret-key-change-this-in-production"))
+	r.Use(sessions.Sessions("rtls_session", store))
 
 	// Setup templates dengan custom functions
 	r.SetFuncMap(template.FuncMap{
@@ -30,8 +42,11 @@ func main() {
 	config.SetupTemplates(r)
 	config.SetupStaticFiles(r)
 
-	// Register routes
-	routes.RegisterRoutes(r)
+	// Initialize Firebase
+	dbClient := config.InitFirebase()
+
+	// Register routes dengan Firebase client
+	routes.SetupRoutes(r, dbClient)
 
 	// Start server
 	log.Println("Server running on http://localhost:8080")
