@@ -1,7 +1,7 @@
-// ✅ PERBAIKAN: Pastikan kode ini dijalankan di global scope
+// main.js - FIXED VERSION (HttpOnly Support)
 console.log('main.js loaded successfully');
 
-// ✅ Fungsi getCookie untuk mengambil cookie
+// ✅ Fungsi getCookie (Tetap disimpan untuk kegunaan lain, misal ambil email)
 function getCookie(name) {
     const nameEQ = name + "=";
     const cookies = document.cookie.split(';');
@@ -16,7 +16,6 @@ function getCookie(name) {
 
 // ✅ Fungsi showAlert untuk menampilkan pesan
 function showAlert(message, type = 'success') {
-    // Cari alert container atau buat baru
     let alertContainer = document.getElementById('alertContainer');
     if (!alertContainer) {
         alertContainer = document.createElement('div');
@@ -51,31 +50,21 @@ function showAlert(message, type = 'success') {
     }, 5000);
 }
 
-// ✅ Fungsi utama fetchAPI
+// ✅ Fungsi utama fetchAPI (DIPERBAIKI)
 async function fetchAPI(endpoint, method = 'GET', body = null) {
     console.log(`fetchAPI: ${method} ${endpoint}`);
     
-    // Ambil token dari cookie
-    const token = getCookie('auth_token');
-    console.log('Token found:', token ? 'Yes' : 'No');
-    
-    if (!token) {
-        console.error('No auth token found. Redirecting to login...');
-        showAlert('Session expired. Please login again.', 'danger');
-        setTimeout(() => {
-            window.location.href = '/login';
-        }, 2000);
-        throw new Error('No authentication token');
-    }
+    // PERBAIKAN: Kita TIDAK mengecek token di sini karena cookie HttpOnly tidak terlihat oleh JS.
+    // Browser akan otomatis mengirim cookie 'auth_token' karena opsi credentials: 'include'.
 
     // Setup options
     const options = {
         method: method,
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
+            'Content-Type': 'application/json'
+            // PERBAIKAN: Tidak perlu header Authorization manual
         },
-        credentials: 'include'
+        credentials: 'include' // PENTING: Ini yang mengirim cookie HttpOnly ke server
     };
 
     // Tambahkan body jika ada
@@ -89,8 +78,9 @@ async function fetchAPI(endpoint, method = 'GET', body = null) {
         const response = await fetch(endpoint, options);
         console.log(`Response status: ${response.status}`);
         
-        // Handle unauthorized
+        // Handle unauthorized (Jika Server Go merespon 401 karena token invalid/expired)
         if (response.status === 401) {
+            console.warn('Unauthorized response from server');
             showAlert('Session expired. Please login again.', 'danger');
             setTimeout(() => {
                 window.location.href = '/login';
