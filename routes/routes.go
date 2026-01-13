@@ -8,40 +8,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine, dbClient *db.Client) {
-	// Initialize controllers dengan Firebase client
-	dashboardController := controllers.NewDashboardController(dbClient)
-	deviceController := controllers.NewDeviceController(dbClient)
+func SetupRoutes(router *gin.Engine, dbClient *db.Client) {
+	authCtrl := controllers.NewAuthController()
+	dashboardCtrl := controllers.NewDashboardController(dbClient)
+	deviceCtrl := controllers.NewDeviceController(dbClient)
 
-	// Public routes (tidak perlu login)
-	public := r.Group("/")
-	{
-		public.GET("/", controllers.LoginIndex)
-		public.GET("/login", controllers.LoginIndex)
-		public.POST("/login", controllers.LoginSubmit)
-		public.GET("/logout", controllers.Logout)
-	}
+	// Public routes
+	router.GET("/login", authCtrl.LoginIndex)
+	router.POST("/login", authCtrl.LoginSubmit)
 
-	// Protected routes (HARUS LOGIN)
-	protected := r.Group("/")
+	// Protected routes (memerlukan auth)
+	protected := router.Group("/")
 	protected.Use(middleware.AuthRequired())
 	{
 		// Dashboard
-		protected.GET("/dashboard", dashboardController.ShowDashboard)
+		protected.GET("/dashboard", dashboardCtrl.ShowDashboard)
+		protected.GET("/stream/devices", dashboardCtrl.StreamDevices)
 
-		// SSE endpoint untuk real-time updates
-		protected.GET("/stream/devices", dashboardController.StreamDevices)
+		// Devices page
+		protected.GET("/devices", deviceCtrl.ShowDevices)
 
-		// Device pages
-		protected.GET("/devices", deviceController.ShowDevices)
+		// Device API endpoints (yang dipanggil oleh JavaScript)
+		protected.GET("/api/devices", deviceCtrl.DeviceGet)           //  Ambil device
+		protected.POST("/api/devices", deviceCtrl.DeviceCreate)       //  Create device
+		protected.PUT("/api/devices/:id", deviceCtrl.DeviceUpdate)    //  Update device
+		protected.DELETE("/api/devices/:id", deviceCtrl.DeviceDelete) //  Delete device
 
-		// Device REST API
-		api := protected.Group("/api/devices")
-		{
-			api.GET("/:id", deviceController.DeviceGet)
-			api.POST("", deviceController.DeviceCreate)
-			api.PUT("/:id", deviceController.DeviceUpdate)
-			api.DELETE("/:id", deviceController.DeviceDelete)
-		}
+		// Logout
+		protected.GET("/logout", authCtrl.Logout)
 	}
 }

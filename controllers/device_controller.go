@@ -1,8 +1,7 @@
 package controllers
 
 import (
-	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -14,27 +13,25 @@ type DeviceController struct {
 	DB *db.Client
 }
 
-// Device struct untuk response
-type Device struct {
-	DeviceID  string  `json:"device_id"`
-	Name      string  `json:"name"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Status    string  `json:"status"`
-}
-
 func NewDeviceController(dbClient *db.Client) *DeviceController {
 	return &DeviceController{DB: dbClient}
 }
 
-// ShowDevices menampilkan halaman devices
-func (dc *DeviceController) ShowDevices(c *gin.Context) {
-	ctx := context.Background()
-	ref := dc.DB.NewRef("Barang")
+/* ================================
+   SHOW DEVICES - Render HTML dengan data dari backend
+================================ */
 
-	var devicesMap map[string]map[string]interface{}
-	if err := ref.Get(ctx, &devicesMap); err != nil {
-		log.Printf("Error fetching devices: %v", err)
+func (dc *DeviceController) ShowDevices(c *gin.Context) {
+	token := GetAuthToken(c)
+	if token == "" {
+		c.Redirect(302, "/login")
+		return
+	}
+
+	// Call backend API untuk get all devices
+	resp, err := MakeBackendRequest("GET", "/barang", token, nil)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("Error fetching devices from backend: %v, Status: %v", err, resp.StatusCode)
 		c.HTML(http.StatusOK, "devices.html", gin.H{
 			"title":   "Devices",
 			"devices": []Device{},
@@ -42,58 +39,75 @@ func (dc *DeviceController) ShowDevices(c *gin.Context) {
 		return
 	}
 
-	// Convert map to slice of Device structs
-	deviceList := []Device{}
-	for deviceID, deviceData := range devicesMap {
-		status, _ := deviceData["status"].(string)
-		name, _ := deviceData["name"].(string)
-		lat, _ := deviceData["latitude"].(float64)
-		lng, _ := deviceData["longitude"].(float64)
-
-		deviceList = append(deviceList, Device{
-			DeviceID:  deviceID,
-			Name:      name,
-			Latitude:  lat,
-			Longitude: lng,
-			Status:    status,
-		})
-	}
+	// Parse response menggunakan helper
+	devices, _ := ParseDevicesResponse(resp)
+	resp.Body.Close()
 
 	c.HTML(http.StatusOK, "devices.html", gin.H{
 		"title":   "Devices",
-		"devices": deviceList,
+		"devices": devices,
 	})
 }
 
-// DeviceGet mengambil detail device berdasarkan ID
-func (dc *DeviceController) DeviceGet(c *gin.Context) {
-	deviceID := c.Param("id")
-	ctx := context.Background()
-	ref := dc.DB.NewRef("Barang/" + deviceID)
+/* ================================
+   DEVICE GET - Ambil detail device by ID
+================================ */
 
-	var device map[string]interface{}
-	if err := ref.Get(ctx, &device); err != nil || device == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Device not found",
+func (dc *DeviceController) DeviceGet(c *gin.Context) {
+	token := GetAuthToken(c)
+	if token == "" {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	deviceID := c.Param("id")
+
+	// Jika ada :id param, ambil device spesifik
+	if deviceID != "" {
+		resp, err := MakeBackendRequest("GET", "/barang/"+deviceID, token, nil)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Device not found",
+			})
+			return
+		}
+
+		var result map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
+	// Jika tidak ada :id param, ambil semua devices
+	resp, err := MakeBackendRequest("GET", "/barang", token, nil)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("Error fetching devices from backend: %v", err)
+		c.JSON(http.StatusOK, gin.H{
+			"data": []Device{},
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"device_id": deviceID,
-			"name":      device["name"],
-			"latitude":  device["latitude"],
-			"longitude": device["longitude"],
-			"status":    device["status"],
-		},
-	})
+	devices, _ := ParseDevicesResponse(resp)
+	resp.Body.Close()
+
+	c.JSON(http.StatusOK, gin.H{"data": devices})
 }
 
-// DeviceCreate membuat device baru
+/* ================================
+   DEVICE CREATE - REST API endpoint
+================================ */
+
 func (dc *DeviceController) DeviceCreate(c *gin.Context) {
+	token := GetAuthToken(c)
+	if token == "" {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	var input struct {
 		Name string `json:"name" binding:"required"`
 	}
@@ -106,39 +120,64 @@ func (dc *DeviceController) DeviceCreate(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
-
-	// Generate device ID
-	deviceID := generateDeviceID(dc.DB)
-
-	// Default values untuk device baru
-	ref := dc.DB.NewRef("Barang/" + deviceID)
-	err := ref.Set(ctx, map[string]interface{}{
+	// Format data sesuai dengan backend
+	backendData := map[string]interface{}{
 		"name":      input.Name,
-		"latitude":  1.1045,   // Default Batam
-		"longitude": 104.0305, // Default Batam
-		"status":    "Tidak_Terdeteksi",
-	})
+		"latitude":  0,
+		"longitude": 0,
+		"status":    "Terdeteksi",
+	}
 
+	// Call backend API - gunakan /barang sesuai backend
+	resp, err := MakeBackendRequest("POST", "/barang", token, backendData)
 	if err != nil {
-		log.Printf("Error creating device: %v", err)
+		log.Printf("Error creating device in backend: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to create device",
+			"error":   "Failed to connect to backend",
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"success":   true,
-		"message":   "Device created successfully",
-		"device_id": deviceID,
-	})
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		log.Printf("Backend returned status: %v", resp.StatusCode)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Backend rejected the request",
+		})
+		return
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	// Tambah success flag
+	result["success"] = true
+
+	c.JSON(http.StatusCreated, result)
 }
 
-// DeviceUpdate update device berdasarkan ID
+/* ================================
+   DEVICE UPDATE - REST API endpoint
+================================ */
+
 func (dc *DeviceController) DeviceUpdate(c *gin.Context) {
+	token := GetAuthToken(c)
+	if token == "" {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	deviceID := c.Param("id")
+	if deviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Device ID is required",
+		})
+		return
+	}
 
 	var input struct {
 		Name string `json:"name"`
@@ -152,113 +191,89 @@ func (dc *DeviceController) DeviceUpdate(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
-	ref := dc.DB.NewRef("Barang/" + deviceID)
-
-	// Cek apakah device exist
-	var existing map[string]interface{}
-	if err := ref.Get(ctx, &existing); err != nil || existing == nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"error":   "Device not found",
-		})
-		return
-	}
-
-	// Update hanya field name
-	updates := map[string]interface{}{
+	// Format update data
+	updateData := map[string]interface{}{
 		"name": input.Name,
 	}
 
-	if err := ref.Update(ctx, updates); err != nil {
-		log.Printf("Error updating device: %v", err)
+	// ✅ PERBAIKAN: Backend menggunakan PATCH, bukan PUT
+	resp, err := MakeBackendRequest("PATCH", "/barang/"+deviceID, token, updateData)
+	if err != nil {
+		log.Printf("Error updating device in backend: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to update device",
+			"error":   "Failed to connect to backend",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Device updated successfully",
-	})
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Backend returned status: %v", resp.StatusCode)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Backend rejected the request",
+		})
+		return
+	}
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	// Tambah success flag
+	result["success"] = true
+
+	c.JSON(http.StatusOK, result)
 }
 
-// DeviceDelete hapus device berdasarkan ID
+/* ================================
+   DEVICE DELETE - REST API endpoint
+================================ */
+
 func (dc *DeviceController) DeviceDelete(c *gin.Context) {
-	deviceID := c.Param("id")
-	ctx := context.Background()
-	ref := dc.DB.NewRef("Barang/" + deviceID)
+	token := GetAuthToken(c)
+	if token == "" {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
 
-	// Cek apakah device exist
-	var existing map[string]interface{}
-	if err := ref.Get(ctx, &existing); err != nil || existing == nil {
-		c.JSON(http.StatusNotFound, gin.H{
+	deviceID := c.Param("id")
+	if deviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   "Device not found",
+			"error":   "Device ID is required",
 		})
 		return
 	}
 
-	if err := ref.Delete(ctx); err != nil {
-		log.Printf("Error deleting device: %v", err)
+	// Call backend API - DELETE /barang/:id
+	resp, err := MakeBackendRequest("DELETE", "/barang/"+deviceID, token, nil)
+	if err != nil {
+		log.Printf("Error deleting device in backend: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   "Failed to delete device",
+			"error":   "Failed to connect to backend",
 		})
 		return
 	}
 
-	// Optional: Tambahkan device ID ke reusable queue
-	reusableRef := dc.DB.NewRef("meta/reusable_ids")
-	var reusableIDs []string
-	if err := reusableRef.Get(ctx, &reusableIDs); err == nil && reusableIDs != nil {
-		reusableIDs = append(reusableIDs, deviceID)
-		reusableRef.Set(ctx, reusableIDs)
-	} else {
-		reusableRef.Set(ctx, []string{deviceID})
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Backend returned status: %v", resp.StatusCode)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Backend rejected the request",
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Device deleted successfully",
-	})
-}
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
 
-// Helper function untuk generate device ID dengan FIFO reuse
-func generateDeviceID(dbClient *db.Client) string {
-	ctx := context.Background()
-	reusableRef := dbClient.NewRef("meta/reusable_ids")
-	counterRef := dbClient.NewRef("meta/device_counter")
+	// Tambah success flag
+	result["success"] = true
 
-	// Cek apakah ada reusable IDs
-	var reusableIDs []string
-	if err := reusableRef.Get(ctx, &reusableIDs); err == nil && len(reusableIDs) > 0 {
-		// Ambil ID pertama (FIFO)
-		deviceID := reusableIDs[0]
-
-		// Hapus dari list
-		if len(reusableIDs) > 1 {
-			reusableRef.Set(ctx, reusableIDs[1:])
-		} else {
-			reusableRef.Delete(ctx)
-		}
-
-		log.Printf("Reusing device ID: %s", deviceID)
-		return deviceID
-	}
-
-	// Jika tidak ada reusable ID, generate baru
-	var counter int
-	if err := counterRef.Get(ctx, &counter); err != nil {
-		counter = 0
-	}
-
-	counter++
-	counterRef.Set(ctx, counter)
-
-	deviceID := fmt.Sprintf("BOX-%03d", counter)
-	log.Printf("Generated new device ID: %s", deviceID)
-	return deviceID
+	c.JSON(http.StatusOK, result)
 }

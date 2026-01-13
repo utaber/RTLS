@@ -1,11 +1,10 @@
-// dashboard.js - Real-time updates with SSE
+// dashboard.js - Real-time updates (simplified tanpa SSE)
 console.log('dashboard.js loaded successfully');
 
 // Global variables
 let mapInstance = null;
 let deviceMarkers = [];
 let tempMarker = null;
-let eventSource = null;
 
 // Update current time
 function updateCurrentTime() {
@@ -62,7 +61,7 @@ function updateStatistics(devices) {
 // Update device table/cards
 function updateDeviceTable(devices) {
     // Desktop table
-    const tbody = document.querySelector('.d-none.d-md-block tbody');
+    const tbody = document.querySelector('table tbody');
     if (tbody) {
         if (devices.length === 0) {
             tbody.innerHTML = `
@@ -342,83 +341,13 @@ function initMap() {
         }
 
         updateMapMarkers(devices);
+        updateStatistics(devices);
+        updateDeviceTable(devices);
         
         console.log("Map initialized successfully");
     } catch (error) {
         console.error("Error initializing map:", error);
     }
-}
-
-// Setup SSE connection for real-time updates
-function setupRealtimeUpdates() {
-    if (typeof EventSource === 'undefined') {
-        console.error('SSE not supported by browser');
-        return;
-    }
-
-    console.log('Setting up real-time updates...');
-    
-    eventSource = new EventSource('/stream/devices');
-    
-    eventSource.onopen = function() {
-        console.log('SSE connection opened');
-        
-        // Show connection indicator
-        const indicator = document.createElement('div');
-        indicator.id = 'sse-indicator';
-        indicator.className = 'badge bg-success position-fixed top-0 end-0 m-3';
-        indicator.innerHTML = '<i class="bi bi-broadcast"></i> Live';
-        document.body.appendChild(indicator);
-    };
-    
-    eventSource.onmessage = function(event) {
-        console.log('Received SSE update');
-        
-        try {
-            const devices = JSON.parse(event.data);
-            console.log('Devices updated:', devices.length);
-            
-            // Update all components
-            updateStatistics(devices);
-            updateDeviceTable(devices);
-            updateMapMarkers(devices);
-            updateCurrentTime();
-            
-            // Flash update indicator
-            const indicator = document.getElementById('sse-indicator');
-            if (indicator) {
-                indicator.classList.remove('bg-success');
-                indicator.classList.add('bg-warning');
-                indicator.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Updating...';
-                
-                setTimeout(() => {
-                    indicator.classList.remove('bg-warning');
-                    indicator.classList.add('bg-success');
-                    indicator.innerHTML = '<i class="bi bi-broadcast"></i> Live';
-                }, 500);
-            }
-        } catch (err) {
-            console.error('Error parsing SSE data:', err);
-        }
-    };
-    
-    eventSource.onerror = function(err) {
-        console.error('SSE error:', err);
-        
-        const indicator = document.getElementById('sse-indicator');
-        if (indicator) {
-            indicator.classList.remove('bg-success');
-            indicator.classList.add('bg-danger');
-            indicator.innerHTML = '<i class="bi bi-x-circle"></i> Disconnected';
-        }
-        
-        // Attempt to reconnect after 5 seconds
-        setTimeout(() => {
-            console.log('Attempting to reconnect...');
-            eventSource.close();
-            setupRealtimeUpdates();
-        }, 5000);
-    };
 }
 
 // Refresh map manually
@@ -441,6 +370,8 @@ function refreshMap() {
             
             if (Array.isArray(devices)) {
                 updateMapMarkers(devices);
+                updateStatistics(devices);
+                updateDeviceTable(devices);
             }
         } catch (err) {
             console.error("Error parsing device data:", err);
@@ -462,14 +393,6 @@ function refreshMap() {
     }
 }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
-    if (eventSource) {
-        eventSource.close();
-        console.log('SSE connection closed');
-    }
-});
-
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing dashboard...');
@@ -481,9 +404,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize map
     initMap();
-    
-    // Setup real-time updates
-    setupRealtimeUpdates();
     
     // Setup refresh button
     const refreshBtn = document.getElementById('refreshMapBtn');

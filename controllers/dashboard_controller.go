@@ -1,12 +1,10 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"firebase.google.com/go/v4/db"
 	"github.com/gin-gonic/gin"
@@ -20,14 +18,21 @@ func NewDashboardController(dbClient *db.Client) *DashboardController {
 	return &DashboardController{DB: dbClient}
 }
 
-// ShowDashboard menampilkan halaman dashboard
-func (dc *DashboardController) ShowDashboard(c *gin.Context) {
-	ctx := context.Background()
-	ref := dc.DB.NewRef("Barang")
+/* ================================
+   SHOW DASHBOARD - Get data dari backend API
+================================ */
 
-	var devices map[string]map[string]interface{}
-	if err := ref.Get(ctx, &devices); err != nil {
-		log.Printf("Error fetching devices: %v", err)
+func (dc *DashboardController) ShowDashboard(c *gin.Context) {
+	token := GetAuthToken(c)
+	if token == "" {
+		c.Redirect(302, "/login")
+		return
+	}
+
+	// Panggil /barang untuk get all devices
+	resp, err := MakeBackendRequest("GET", "/barang", token, nil)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("Error fetching devices from backend: %v", err)
 		c.HTML(http.StatusOK, "dashboard.html", gin.H{
 			"title":               "Dashboard",
 			"totalDevices":        0,
@@ -41,29 +46,29 @@ func (dc *DashboardController) ShowDashboard(c *gin.Context) {
 		return
 	}
 
+	// Parse response menggunakan helper
+	devices, _ := ParseDevicesResponse(resp)
+	resp.Body.Close()
+
+	// Hitung statistik
 	deviceLocations := []gin.H{}
 	totalDevices := len(devices)
 	activeDevices := 0
 	alertsCount := 0
 
-	for deviceID, deviceData := range devices {
-		status, _ := deviceData["status"].(string)
-		name, _ := deviceData["name"].(string)
-		lat, _ := deviceData["latitude"].(float64)
-		lng, _ := deviceData["longitude"].(float64)
-
-		if status == "Terdeteksi" {
+	for _, device := range devices {
+		if device.Status == "Terdeteksi" {
 			activeDevices++
 		} else {
 			alertsCount++
 		}
 
 		deviceLocations = append(deviceLocations, gin.H{
-			"deviceID": deviceID,
-			"name":     name,
-			"lat":      lat,
-			"lng":      lng,
-			"status":   status,
+			"deviceID": device.DeviceID,
+			"name":     device.Name,
+			"lat":      device.Latitude,
+			"lng":      device.Longitude,
+			"status":   device.Status,
 		})
 	}
 
@@ -72,6 +77,7 @@ func (dc *DashboardController) ShowDashboard(c *gin.Context) {
 		activePercentage = (activeDevices * 100) / totalDevices
 	}
 
+	// Convert to JSON string untuk digunakan di template
 	jsonBytes, _ := json.Marshal(deviceLocations)
 
 	c.HTML(http.StatusOK, "dashboard.html", gin.H{
@@ -86,9 +92,16 @@ func (dc *DashboardController) ShowDashboard(c *gin.Context) {
 	})
 }
 
-// StreamDevices endpoint untuk real-time updates menggunakan SSE
+/* ================================
+   STREAM DEVICES - SSE endpoint
+================================ */
+
 func (dc *DashboardController) StreamDevices(c *gin.Context) {
-	ctx := c.Request.Context()
+	token := GetAuthToken(c)
+	if token == "" {
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	// Set headers untuk SSE
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
@@ -103,95 +116,40 @@ func (dc *DashboardController) StreamDevices(c *gin.Context) {
 		return
 	}
 
-	ref := dc.DB.NewRef("Barang")
+	ctx := c.Request.Context()
 
-	// Channel untuk menerima updates
-	updateChan := make(chan map[string]interface{}, 10)
-	errorChan := make(chan error, 1)
-
-	// Goroutine untuk polling Firebase
-	go func() {
-		// Kirim data awal
-		var devices map[string]map[string]interface{}
-		if err := ref.Get(context.Background(), &devices); err != nil {
-			errorChan <- err
-			return
-		}
-
-		updateChan <- map[string]interface{}{"devices": devices}
-
-		// Polling setiap 2 detik untuk perubahan
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		var lastData map[string]map[string]interface{}
-		lastData = devices
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				var currentDevices map[string]map[string]interface{}
-				if err := ref.Get(context.Background(), &currentDevices); err != nil {
-					log.Printf("Error polling Firebase: %v", err)
-					continue
-				}
-
-				// Cek apakah data berubah
-				currentJSON, _ := json.Marshal(currentDevices)
-				lastJSON, _ := json.Marshal(lastData)
-
-				if string(currentJSON) != string(lastJSON) {
-					updateChan <- map[string]interface{}{"devices": currentDevices}
-					lastData = currentDevices
-				}
-			}
-		}
-	}()
-
-	// Kirim updates ke client
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Client disconnected from SSE")
-			return
-		case err := <-errorChan:
-			log.Printf("SSE Error: %v", err)
-			fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", err.Error())
-			flusher.Flush()
-			return
-		case update := <-updateChan:
-			devices, ok := update["devices"].(map[string]map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			deviceLocations := []gin.H{}
-			for deviceID, deviceData := range devices {
-				status, _ := deviceData["status"].(string)
-				name, _ := deviceData["name"].(string)
-				lat, _ := deviceData["latitude"].(float64)
-				lng, _ := deviceData["longitude"].(float64)
-
-				deviceLocations = append(deviceLocations, gin.H{
-					"deviceID": deviceID,
-					"name":     name,
-					"lat":      lat,
-					"lng":      lng,
-					"status":   status,
-				})
-			}
-
-			jsonData, err := json.Marshal(deviceLocations)
-			if err != nil {
-				log.Printf("Error marshaling data: %v", err)
-				continue
-			}
-
-			// Kirim SSE event
-			fmt.Fprintf(c.Writer, "data: %s\n\n", jsonData)
-			flusher.Flush()
-		}
+	// Ambil data devices dari backend
+	resp, err := MakeBackendRequest("GET", "/barang", token, nil)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("Error fetching devices: %v", err)
+		fmt.Fprintf(c.Writer, "data: []\n\n")
+		flusher.Flush()
+		return
 	}
+
+	// Parse response
+	devices, _ := ParseDevicesResponse(resp)
+	resp.Body.Close()
+
+	// Transform ke format yang diharapkan frontend
+	deviceLocations := []gin.H{}
+	for _, device := range devices {
+		deviceLocations = append(deviceLocations, gin.H{
+			"deviceID": device.DeviceID,
+			"name":     device.Name,
+			"lat":      device.Latitude,
+			"lng":      device.Longitude,
+			"status":   device.Status,
+		})
+	}
+
+	jsonData, _ := json.Marshal(deviceLocations)
+
+	// Kirim ke frontend dengan format SSE
+	fmt.Fprintf(c.Writer, "data: %s\n\n", string(jsonData))
+	flusher.Flush()
+
+	// Wait untuk client disconnect
+	<-ctx.Done()
+	log.Println("Client disconnected from SSE")
 }

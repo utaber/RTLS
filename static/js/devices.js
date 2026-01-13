@@ -1,87 +1,179 @@
 // devices.js - Device management functionality
+
+// ========== KONFIGURASI ==========
 console.log('devices.js loaded successfully');
 
 // Global variables untuk menyimpan data sementara
 let currentEditDeviceId = null;
 let currentDeleteDeviceId = null;
 
-// Function untuk show alert
-function showAlert(message, type = 'success') {
-    const alertContainer = document.getElementById('alertContainer');
-    if (!alertContainer) return;
-
-    const alertHTML = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-
-    alertContainer.innerHTML = alertHTML;
-
-    // Auto hide after 5 seconds
-    setTimeout(() => {
-        const alert = alertContainer.querySelector('.alert');
-        if (alert) {
-            alert.classList.remove('show');
-            setTimeout(() => {
-                alertContainer.innerHTML = '';
-            }, 150);
-        }
-    }, 5000);
+// ========== HELPER FUNCTIONS ==========
+function showAlertLocal(message, type = 'success') {
+    // Coba gunakan showAlert dari main.js jika tersedia
+    if (typeof window.showAlert !== 'undefined') {
+        window.showAlert(message, type);
+    } else {
+        // Fallback ke alert browser
+        alert(`${type.toUpperCase()}: ${message}`);
+    }
 }
 
-// Function untuk save device (Create)
+// ========== DEVICE FUNCTIONS ==========
+
+// Function untuk save device (CREATE)
 async function saveDevice() {
     console.log('saveDevice called');
+    
+    // Cek jika fetchAPI tersedia
+    if (typeof window.fetchAPI === 'undefined') {
+        showAlertLocal('System not ready. Please wait a moment and try again.', 'danger');
+        return;
+    }
     
     const name = document.getElementById('add_name').value.trim();
 
     if (!name) {
-        showAlert('Please enter device name', 'danger');
+        showAlertLocal('Please enter device name', 'danger');
         return;
     }
 
     try {
-        const response = await fetch('/api/devices', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name: name
-            })
+        console.log('Creating device with name:', name);
+        
+        const response = await window.fetchAPI('/api/devices', 'POST', {
+            name: name
         });
 
+        console.log('Response status:', response.status);
+        
         const result = await response.json();
+        console.log('Response result:', result);
 
-        if (response.ok && result.success) {
-            // Close modal
+        // Handle response
+        if (response.ok) {
             const modal = bootstrap.Modal.getInstance(document.getElementById('addDeviceModal'));
             if (modal) modal.hide();
 
-            // Clear form
             document.getElementById('addDeviceForm').reset();
+            
+            // Ambil device_id dari response
+            const deviceId = result.device_id || result.data?.device_id || result.id || 'N/A';
+            showAlertLocal(`Device "${name}" created successfully with ID: ${deviceId}`, 'success');
 
-            // Show success alert
-            showAlert(`Device "${name}" created successfully with ID: ${result.device_id}`, 'success');
-
-            // Reload page after short delay
             setTimeout(() => {
                 window.location.reload();
             }, 1500);
         } else {
-            showAlert(result.error || 'Failed to create device', 'danger');
+            showAlertLocal(result.error || result.detail || result.message || 'Failed to create device', 'danger');
         }
     } catch (error) {
         console.error('Error creating device:', error);
-        showAlert('Error creating device. Please try again.', 'danger');
+        showAlertLocal('Error creating device. Please try again.', 'danger');
+    }
+}
+
+// Function untuk UPDATE device
+async function updateDevice() {
+    console.log('updateDevice called');
+    
+    // Cek jika fetchAPI tersedia
+    if (typeof window.fetchAPI === 'undefined') {
+        showAlertLocal('System not ready. Please wait a moment and try again.', 'danger');
+        return;
+    }
+    
+    if (!currentEditDeviceId) {
+        showAlertLocal('No device selected', 'danger');
+        return;
+    }
+
+    const name = document.getElementById('edit_name').value.trim();
+
+    if (!name) {
+        showAlertLocal('Please enter device name', 'danger');
+        return;
+    }
+
+    try {
+        console.log('Updating device:', currentEditDeviceId, 'with name:', name);
+        
+        const response = await window.fetchAPI(`/api/devices/${currentEditDeviceId}`, 'PUT', {
+            name: name
+        });
+
+        console.log('Update response status:', response.status);
+        
+        const result = await response.json();
+        console.log('Update result:', result);
+
+        if (response.ok) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editDeviceModal'));
+            if (modal) modal.hide();
+
+            document.getElementById('editDeviceForm').reset();
+            currentEditDeviceId = null;
+
+            showAlertLocal(`Device updated successfully`, 'success');
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showAlertLocal(result.error || result.detail || result.message || 'Failed to update device', 'danger');
+        }
+    } catch (error) {
+        console.error('Error updating device:', error);
+        showAlertLocal('Error updating device. Please try again.', 'danger');
+    }
+}
+
+// Function untuk DELETE device
+async function confirmDelete() {
+    console.log('confirmDelete called');
+    
+    // Cek jika fetchAPI tersedia
+    if (typeof window.fetchAPI === 'undefined') {
+        showAlertLocal('System not ready. Please wait a moment and try again.', 'danger');
+        return;
+    }
+    
+    if (!currentDeleteDeviceId) {
+        showAlertLocal('No device selected', 'danger');
+        return;
+    }
+
+    try {
+        console.log('Deleting device:', currentDeleteDeviceId);
+        
+        const response = await window.fetchAPI(`/api/devices/${currentDeleteDeviceId}`, 'DELETE', null);
+
+        console.log('Delete response status:', response.status);
+        
+        const result = await response.json();
+        console.log('Delete result:', result);
+
+        if (response.ok) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('deleteDeviceModal'));
+            if (modal) modal.hide();
+
+            currentDeleteDeviceId = null;
+
+            showAlertLocal(`Device deleted successfully`, 'success');
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showAlertLocal(result.error || result.detail || result.message || 'Failed to delete device', 'danger');
+        }
+    } catch (error) {
+        console.error('Error deleting device:', error);
+        showAlertLocal('Error deleting device. Please try again.', 'danger');
     }
 }
 
 // Function untuk open edit modal
-async function openEditModal(deviceId, deviceName) {
+function openEditModal(deviceId, deviceName) {
     console.log('openEditModal called:', deviceId, deviceName);
     
     currentEditDeviceId = deviceId;
@@ -93,60 +185,6 @@ async function openEditModal(deviceId, deviceName) {
     // Show modal
     const modal = new bootstrap.Modal(document.getElementById('editDeviceModal'));
     modal.show();
-}
-
-// Function untuk update device
-async function updateDevice() {
-    console.log('updateDevice called');
-    
-    if (!currentEditDeviceId) {
-        showAlert('No device selected', 'danger');
-        return;
-    }
-
-    const name = document.getElementById('edit_name').value.trim();
-
-    if (!name) {
-        showAlert('Please enter device name', 'danger');
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/devices/${currentEditDeviceId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                name: name
-            })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editDeviceModal'));
-            if (modal) modal.hide();
-
-            // Clear form
-            document.getElementById('editDeviceForm').reset();
-            currentEditDeviceId = null;
-
-            // Show success alert
-            showAlert(`Device updated successfully`, 'success');
-
-            // Reload page after short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        } else {
-            showAlert(result.error || 'Failed to update device', 'danger');
-        }
-    } catch (error) {
-        console.error('Error updating device:', error);
-        showAlert('Error updating device. Please try again.', 'danger');
-    }
 }
 
 // Function untuk open delete modal
@@ -165,49 +203,41 @@ function openDeleteModal(deviceId, deviceName) {
     modal.show();
 }
 
-// Function untuk confirm delete
-async function confirmDelete() {
-    console.log('confirmDelete called');
-    
-    if (!currentDeleteDeviceId) {
-        showAlert('No device selected', 'danger');
+// ========== INITIALIZATION ==========
+
+// Function untuk initialize setelah semua script siap
+function initializeDevices() {
+    console.log('Initializing devices functionality...');
+    console.log('Auth token cookie:', document.cookie);
+    console.log('fetchAPI available:', typeof window.fetchAPI !== 'undefined');
+    console.log('Bootstrap available:', typeof bootstrap !== 'undefined');
+
+    // Cek jika semua dependency tersedia
+    if (typeof window.fetchAPI === 'undefined') {
+        console.error('ERROR: fetchAPI is not available!');
+        showAlertLocal('System loading... Please wait a moment.', 'info');
+        
+        // Coba lagi setelah 1 detik
+        setTimeout(initializeDevices, 1000);
         return;
     }
 
-    try {
-        const response = await fetch(`/api/devices/${currentDeleteDeviceId}`, {
-            method: 'DELETE'
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('deleteDeviceModal'));
-            if (modal) modal.hide();
-
-            currentDeleteDeviceId = null;
-
-            // Show success alert
-            showAlert(`Device deleted successfully`, 'success');
-
-            // Reload page after short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        } else {
-            showAlert(result.error || 'Failed to delete device', 'danger');
-        }
-    } catch (error) {
-        console.error('Error deleting device:', error);
-        showAlert('Error deleting device. Please try again.', 'danger');
+    if (typeof bootstrap === 'undefined') {
+        console.error('ERROR: Bootstrap is not available!');
+        showAlertLocal('Bootstrap not loaded. Please refresh page.', 'danger');
+        return;
     }
+
+    console.log('All dependencies loaded successfully!');
+
+    // Setup event listeners
+    setupEventListeners();
+    
+    console.log('devices.js ready');
 }
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('devices.js initialized');
-
+// Setup event listeners
+function setupEventListeners() {
     // Add event listeners untuk form submission dengan Enter key
     const addNameInput = document.getElementById('add_name');
     if (addNameInput) {
@@ -230,21 +260,68 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Clear modals when closed
-    document.getElementById('addDeviceModal')?.addEventListener('hidden.bs.modal', function() {
-        document.getElementById('addDeviceForm').reset();
-    });
+    const addModal = document.getElementById('addDeviceModal');
+    if (addModal) {
+        addModal.addEventListener('hidden.bs.modal', function() {
+            const form = document.getElementById('addDeviceForm');
+            if (form) form.reset();
+        });
+    }
 
-    document.getElementById('editDeviceModal')?.addEventListener('hidden.bs.modal', function() {
-        document.getElementById('editDeviceForm').reset();
-        currentEditDeviceId = null;
-    });
+    const editModal = document.getElementById('editDeviceModal');
+    if (editModal) {
+        editModal.addEventListener('hidden.bs.modal', function() {
+            const form = document.getElementById('editDeviceForm');
+            if (form) form.reset();
+            currentEditDeviceId = null;
+        });
+    }
 
-    document.getElementById('deleteDeviceModal')?.addEventListener('hidden.bs.modal', function() {
-        currentDeleteDeviceId = null;
-    });
+    const deleteModal = document.getElementById('deleteDeviceModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('hidden.bs.modal', function() {
+            currentDeleteDeviceId = null;
+        });
+    }
+}
 
-    console.log('devices.js ready');
-});
+// ========== STARTUP ==========
+
+// Tunggu DOM siap DAN main.js selesai load
+function waitForDependencies() {
+    console.log('Waiting for dependencies...');
+    
+    // Cek jika DOM sudah ready
+    if (document.readyState === 'loading') {
+        console.log('DOM still loading, waiting...');
+        document.addEventListener('DOMContentLoaded', waitForDependencies);
+        return;
+    }
+    
+    // Cek jika main.js sudah load (fetchAPI tersedia)
+    if (typeof window.fetchAPI === 'undefined') {
+        console.log('fetchAPI not ready yet, waiting...');
+        setTimeout(waitForDependencies, 500);
+        return;
+    }
+    
+    // Cek jika Bootstrap sudah load
+    if (typeof bootstrap === 'undefined') {
+        console.log('Bootstrap not ready yet, waiting...');
+        setTimeout(waitForDependencies, 500);
+        return;
+    }
+    
+    // Semua dependency siap, initialize
+    console.log('All dependencies ready!');
+    initializeDevices();
+}
+
+// Mulai proses
+console.log('Starting devices.js initialization...');
+waitForDependencies();
+
+// ========== EXPORT FUNCTIONS ==========
 
 // Export functions untuk global use
 window.saveDevice = saveDevice;
@@ -253,4 +330,4 @@ window.openEditModal = openEditModal;
 window.openDeleteModal = openDeleteModal;
 window.confirmDelete = confirmDelete;
 
-console.log('devices.js functions exported to window');
+console.log('devices.js functions registered for export');

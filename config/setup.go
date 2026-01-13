@@ -25,7 +25,7 @@ func SetupStaticFiles(r *gin.Engine) {
 func InitFirebase() *db.Client {
 	ctx := context.Background()
 
-	// Path ke service account key (sesuaikan dengan path Anda)
+	// Path ke service account key
 	serviceAccountKey := os.Getenv("FIREBASE_SERVICE_ACCOUNT")
 	if serviceAccountKey == "" {
 		// Coba beberapa lokasi umum
@@ -48,7 +48,7 @@ func InitFirebase() *db.Client {
 		}
 	}
 
-	// Database URL (sesuaikan dengan Firebase Anda)
+	// Database URL
 	databaseURL := os.Getenv("FIREBASE_DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "https://rtlsrks513-tes-default-rtdb.asia-southeast1.firebasedatabase.app"

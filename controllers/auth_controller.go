@@ -1,110 +1,39 @@
 package controllers
 
 import (
-	"crypto/rand"
-	"encoding/base64"
+	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-/* ================================
-   STRUCT USER DARI FIREBASE RTDB
-================================ */
+type AuthController struct{}
 
-type User struct {
-	Email    string `json:"Email"`
-	Password string `json:"Password"`
-}
-
-type UsersResponse struct {
-	Admin User `json:"Admin"`
-}
-
-const FirebaseDBURL = "https://rtlsrks513-tes-default-rtdb.asia-southeast1.firebasedatabase.app"
-
-/* ================================
-   AMBIL DATA USER DARI FIREBASE RTDB
-================================ */
-
-func getUserFromFirebase(email string) (*User, error) {
-	// Query ke Firebase Realtime Database
-	resp, err := http.Get(FirebaseDBURL + "/Users.json")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Cek status response
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("gagal mengambil data dari Firebase")
-	}
-
-	var users UsersResponse
-	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
-		return nil, err
-	}
-
-	// Cek apakah email cocok dengan Admin
-	if users.Admin.Email == email {
-		return &users.Admin, nil
-	}
-
-	return nil, errors.New("user not found")
-}
-
-/* ================================
-   GENERATE SIMPLE TOKEN
-================================ */
-
-func generateToken() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
-}
-
-/* ================================
-   VALIDASI LOGIN
-================================ */
-
-func validateLogin(email, password string) (string, error) {
-	// Ambil user dari Firebase
-	user, err := getUserFromFirebase(email)
-	if err != nil {
-		return "", errors.New("email tidak ditemukan")
-	}
-
-	// Cek password (PLAINTEXT - tidak aman untuk production!)
-	if user.Password != password {
-		return "", errors.New("password salah")
-	}
-
-	// Generate token sederhana
-	token := generateToken()
-	return token, nil
+func NewAuthController() *AuthController {
+	return &AuthController{}
 }
 
 /* ================================
    HALAMAN LOGIN
 ================================ */
 
-func LoginIndex(c *gin.Context) {
+func (ac *AuthController) LoginIndex(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", gin.H{
 		"title": "Login",
 	})
 }
 
 /* ================================
-   SUBMIT LOGIN
+   SUBMIT LOGIN - CALL BACKEND API
 ================================ */
 
-func LoginSubmit(c *gin.Context) {
+func (ac *AuthController) LoginSubmit(c *gin.Context) {
 	email := c.PostForm("email")
 	password := c.PostForm("password")
 
+	// Validasi input sederhana
 	if email == "" || password == "" {
 		c.HTML(http.StatusBadRequest, "login.html", gin.H{
 			"error": "Email dan password wajib diisi",
@@ -113,27 +42,52 @@ func LoginSubmit(c *gin.Context) {
 		return
 	}
 
-	//  VALIDASI LOGIN
-	token, err := validateLogin(email, password)
-	if err != nil {
+	// Kirim request ke backend API
+	loginReq := LoginRequest{
+		Email:    email,
+		Password: password,
+	}
+
+	reqBody, _ := json.Marshal(loginReq)
+	resp, err := http.Post(
+		BackendAPI+"/auth/login",
+		"application/json",
+		bytes.NewBuffer(reqBody),
+	)
+
+	if err != nil || resp.StatusCode != http.StatusOK {
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
-			"error": err.Error(),
+			"error": "Email atau password salah",
 			"title": "Login",
 		})
 		return
 	}
 
-	//  SIMPAN TOKEN DI COOKIE
+	// Parse response JWT dari backend
+	var loginResp LoginResponse
+	json.NewDecoder(resp.Body).Decode(&loginResp)
+	resp.Body.Close()
+
+	if loginResp.AccessToken == "" {
+		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
+			"error": "Gagal mendapatkan token dari server",
+			"title": "Login",
+		})
+		return
+	}
+
+	// Simpan JWT token dari backend ke cookie HttpOnly
 	c.SetCookie(
-		"firebase_token",
-		token,
+		"auth_token",             // nama cookie
+		loginResp.AccessToken,    // JWT dari backend
 		int(time.Hour.Seconds()), // 1 jam
-		"/",
-		"",
-		false, // ubah ke true kalau pakai HTTPS
-		true,  // HttpOnly
+		"/",                      // path
+		"",                       // domain
+		false,                    // Secure (set true untuk HTTPS)
+		true,                     // HttpOnly
 	)
 
+	// Simpan email ke cookie biasa (untuk reference)
 	c.SetCookie(
 		"user_email",
 		email,
@@ -141,7 +95,7 @@ func LoginSubmit(c *gin.Context) {
 		"/",
 		"",
 		false,
-		false,
+		false, // tidak HttpOnly karena hanya info saja
 	)
 
 	c.Redirect(http.StatusFound, "/dashboard")
@@ -151,8 +105,10 @@ func LoginSubmit(c *gin.Context) {
    LOGOUT
 ================================ */
 
-func Logout(c *gin.Context) {
-	c.SetCookie("firebase_token", "", -1, "/", "", false, true)
+func (ac *AuthController) Logout(c *gin.Context) {
+	// Hapus cookies
+	c.SetCookie("auth_token", "", -1, "/", "", false, true)
 	c.SetCookie("user_email", "", -1, "/", "", false, false)
+
 	c.Redirect(http.StatusFound, "/login")
 }
