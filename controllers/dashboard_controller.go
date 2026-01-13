@@ -6,16 +6,15 @@ import (
 	"log"
 	"net/http"
 
-	"firebase.google.com/go/v4/db"
 	"github.com/gin-gonic/gin"
 )
 
 type DashboardController struct {
-	DB *db.Client
+	// DB dihapus karena tidak digunakan (pakai API Backend)
 }
 
-func NewDashboardController(dbClient *db.Client) *DashboardController {
-	return &DashboardController{DB: dbClient}
+func NewDashboardController() *DashboardController {
+	return &DashboardController{}
 }
 
 /* ================================

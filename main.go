@@ -42,11 +42,11 @@ func main() {
 	config.SetupTemplates(r)
 	config.SetupStaticFiles(r)
 
-	// Initialize Firebase
-	dbClient := config.InitFirebase()
+	// HAPUS BAGIAN INIT FIREBASE
+	// dbClient := config.InitFirebase()
 
-	// Register routes dengan Firebase client
-	routes.SetupRoutes(r, dbClient)
+	// Register routes TANPA dbClient
+	routes.SetupRoutes(r)
 
 	// Start server
 	log.Println("Server running on http://localhost:8080")

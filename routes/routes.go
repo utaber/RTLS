@@ -4,14 +4,15 @@ import (
 	"rtls_rks513/controllers"
 	"rtls_rks513/middleware"
 
-	"firebase.google.com/go/v4/db"
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(router *gin.Engine, dbClient *db.Client) {
+// SetupRoutes tidak lagi butuh dbClient
+func SetupRoutes(router *gin.Engine) {
 	authCtrl := controllers.NewAuthController()
-	dashboardCtrl := controllers.NewDashboardController(dbClient)
-	deviceCtrl := controllers.NewDeviceController(dbClient)
+	// Inisialisasi controller tanpa argumen database
+	dashboardCtrl := controllers.NewDashboardController()
+	deviceCtrl := controllers.NewDeviceController()
 
 	// Public routes
 	router.GET("/login", authCtrl.LoginIndex)

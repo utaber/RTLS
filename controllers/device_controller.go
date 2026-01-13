@@ -5,16 +5,15 @@ import (
 	"log"
 	"net/http"
 
-	"firebase.google.com/go/v4/db"
 	"github.com/gin-gonic/gin"
 )
 
 type DeviceController struct {
-	DB *db.Client
+	// DB dihapus
 }
 
-func NewDeviceController(dbClient *db.Client) *DeviceController {
-	return &DeviceController{DB: dbClient}
+func NewDeviceController() *DeviceController {
+	return &DeviceController{}
 }
 
 /* ================================
@@ -196,7 +195,7 @@ func (dc *DeviceController) DeviceUpdate(c *gin.Context) {
 		"name": input.Name,
 	}
 
-	// ✅ PERBAIKAN: Backend menggunakan PATCH, bukan PUT
+	// Backend menggunakan PATCH
 	resp, err := MakeBackendRequest("PATCH", "/barang/"+deviceID, token, updateData)
 	if err != nil {
 		log.Printf("Error updating device in backend: %v", err)
