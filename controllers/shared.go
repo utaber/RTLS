@@ -5,11 +5,20 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os" // Tambahkan import os
 
 	"github.com/gin-gonic/gin"
 )
 
-const BackendAPI = "http://localhost:8000"
+// Ubah dari const menjadi var
+var BackendAPI = "http://localhost:8000"
+
+// Tambahkan fungsi init untuk membaca env
+func init() {
+	if url := os.Getenv("BACKEND_URL"); url != "" {
+		BackendAPI = url
+	}
+}
 
 // Device struct untuk semua controller
 type Device struct {
